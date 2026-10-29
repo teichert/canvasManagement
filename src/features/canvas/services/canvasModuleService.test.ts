@@ -105,6 +105,20 @@ describe("placeInModule", () => {
     ]);
   });
 
+  it("adds or moves it at a position when given one, so Canvas doesn't append it", async () => {
+    inModules();
+    await canvasModuleService.placeInModule(42, 9, quiz, async () => 3);
+    expect(vi.mocked(rateLimitAwarePost).mock.calls[0][1]).toEqual({
+      module_item: { title: "Quiz 1", type: "Quiz", content_id: 7, position: 3 },
+    });
+
+    inModules(4);
+    await canvasModuleService.placeInModule(42, 9, quiz, async () => 2);
+    expect(vi.mocked(axiosClient.put).mock.calls[0][1]).toEqual({
+      module_item: { module_id: 9, position: 2 },
+    });
+  });
+
   it("finds a page by its id and adds it by its url", async () => {
     inModules();
 

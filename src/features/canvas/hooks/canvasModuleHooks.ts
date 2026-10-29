@@ -7,7 +7,9 @@ import {
 } from "../services/canvasModuleService";
 import { IModuleItem } from "@/features/local/modules/IModuleItem";
 import toast from "react-hot-toast";
-import { byOrderingDate } from "@/features/local/modules/moduleItemOrder";
+import { byOrderingDate, positionInModule } from "@/features/local/modules/moduleItemOrder";
+import { useTRPC } from "@/services/serverFunctions/trpcClient";
+import { useCourseContext } from "@/app/course/[courseName]/context/courseContext";
 import { useMemo } from "react";
 
 export const canvasCourseModuleKeys = {
@@ -85,16 +87,44 @@ export const useCanvasModuleIdByName = () => {
   };
 };
 
-/** For Add to Canvas: adds a new item to the module named after its folder. */
+/**
+ * Where an item goes in its Canvas module, by date among the module's files
+ * (see positionInModule), or undefined for the end.
+ */
+const usePositionInCanvasModule = () => {
+  const { courseName } = useCourseContext();
+  const { data: settings } = useLocalCourseSettingsQuery();
+  const queryClient = useQueryClient();
+  const trpc = useTRPC();
+  return async (moduleName: string, moduleId: number, title: string) => {
+    const input = { courseName, moduleName };
+    const [assignments, quizzes, pages, canvasModule] = await Promise.all([
+      queryClient.ensureQueryData(trpc.assignment.getAllAssignments.queryOptions(input)),
+      queryClient.ensureQueryData(trpc.quiz.getAllQuizzes.queryOptions(input)),
+      queryClient.ensureQueryData(trpc.page.getAllPages.queryOptions(input)),
+      canvasModuleService.getModuleWithItems(settings.canvasId, moduleId),
+    ]);
+    const canvasTitles = [...(canvasModule.items ?? [])]
+      .sort((a, b) => a.position - b.position)
+      .map((i) => i.title)
+      .filter((t) => t !== title);
+    return positionInModule(title, [...assignments, ...quizzes, ...pages], canvasTitles);
+  };
+};
+
+/** For Add to Canvas: adds a new item to the module named after its folder, in date order. */
 export const useAddToCanvasModule = () => {
   const { data: settings } = useLocalCourseSettingsQuery();
   const queryClient = useQueryClient();
   const moduleIdByName = useCanvasModuleIdByName();
+  const positionIn = usePositionInCanvasModule();
   return async (moduleName: string, item: ModuleItemContent) => {
+    const moduleId = await moduleIdByName(moduleName);
     await canvasModuleService.addModuleItem(
       settings.canvasId,
-      await moduleIdByName(moduleName),
-      item
+      moduleId,
+      item,
+      await positionIn(moduleName, moduleId, item.title)
     );
     queryClient.invalidateQueries({
       queryKey: canvasCourseModuleKeys.modules(settings.canvasId),
@@ -111,11 +141,15 @@ export const usePlaceInCanvasModule = () => {
   const { data: settings } = useLocalCourseSettingsQuery();
   const queryClient = useQueryClient();
   const moduleIdByName = useCanvasModuleIdByName();
+  const positionIn = usePositionInCanvasModule();
   return async (moduleName: string, item: ModuleItemContent) => {
+    const moduleId = await moduleIdByName(moduleName);
     const { placed, removed } = await canvasModuleService.placeInModule(
       settings.canvasId,
-      await moduleIdByName(moduleName),
-      item
+      moduleId,
+      item,
+      // read only when it's added or moved here
+      () => positionIn(moduleName, moduleId, item.title)
     );
     const changes = [
       placed === "moved" && `moved it to the "${moduleName}" module`,

@@ -73,18 +73,22 @@ export const canvasModuleService = {
     return response.data;
   },
 
+  /** Adds an item at `position` (1-based), or at the end without one. */
   async addModuleItem(
     canvasCourseId: number,
     canvasModuleId: number,
-    item: ModuleItemContent
+    item: ModuleItemContent,
+    position?: number
   ) {
     await rateLimitAwarePost<CanvasModuleItem>(
       `${canvasApi}/courses/${canvasCourseId}/modules/${canvasModuleId}/items`,
       {
-        module_item:
-          item.type === "Page"
+        module_item: {
+          ...(item.type === "Page"
             ? { title: item.title, type: "Page", page_url: item.pageUrl }
-            : { title: item.title, type: item.type, content_id: item.id },
+            : { title: item.title, type: item.type, content_id: item.id }),
+          ...(position !== undefined && { position }),
+        },
       }
     );
   },
@@ -96,7 +100,9 @@ export const canvasModuleService = {
   async placeInModule(
     canvasCourseId: number,
     canvasModuleId: number,
-    item: ModuleItemContent
+    item: ModuleItemContent,
+    /** where to add or move it (1-based), asked only when it is added or moved */
+    position: () => Promise<number | undefined> = async () => undefined
   ): Promise<{ placed: "already" | "moved" | "added"; removed: number }> {
     const { data } = await axiosClient.get<{
       items: { current?: { id: number; module_id: number } }[];
@@ -113,13 +119,17 @@ export const canvasModuleService = {
     for (const extra of extras) await rateLimitAwareDelete(itemUrl(extra));
 
     if (!kept) {
-      await canvasModuleService.addModuleItem(canvasCourseId, canvasModuleId, item);
+      await canvasModuleService.addModuleItem(canvasCourseId, canvasModuleId, item, await position());
       return { placed: "added", removed: 0 };
     }
     if (kept.module_id === canvasModuleId)
       return { placed: "already", removed: extras.length };
+    const at = await position();
     await axiosClient.put(itemUrl(kept), {
-      module_item: { module_id: canvasModuleId },
+      module_item: {
+        module_id: canvasModuleId,
+        ...(at !== undefined && { position: at }),
+      },
     });
     return { placed: "moved", removed: extras.length };
   },

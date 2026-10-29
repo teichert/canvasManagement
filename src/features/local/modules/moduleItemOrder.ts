@@ -30,3 +30,19 @@ export function canvasOrderDiffers(items: Dated[], canvasTitles: string[]) {
   });
   return times.some((time, i) => i > 0 && time < times[i - 1]);
 }
+
+/**
+ * Where item `name` goes in a Canvas module (`canvasTitles`, in Canvas's
+ * order, without it): Canvas's 1-based position of the first item dated
+ * after it, or undefined to put it at the end. Canvas items the module's
+ * files don't have are passed over, and the rest are left where they are.
+ */
+export function positionInModule(name: string, items: Dated[], canvasTitles: string[]) {
+  const item = items.find((i) => i.name === name);
+  if (!item) return undefined;
+  const later = canvasTitles.findIndex((title) => {
+    const other = items.find((i) => i.name === title);
+    return !!other && orderingTime(other) > orderingTime(item);
+  });
+  return later === -1 ? undefined : later + 1;
+}
