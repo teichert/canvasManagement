@@ -248,7 +248,7 @@ export function CompareQuizWithCanvas({
         update.mutate({ quiz, canvasQuizId: canvasQuiz.id, moduleName })
       }
       updating={update.isPending}
-      updateNote="Update Canvas pushes the file's settings, moves the quiz to the file's module and, if any question differs, replaces the questions in Canvas with the file's. When it replaces them on a published quiz, students keep getting the old questions until you click Save it now on the quiz page in Canvas (the API can't do that). If students have started, it warns first: they keep the questions they got and are not regraded. It refuses to change the point total they were scored out of."
+      updateNote="Update Canvas pushes the file's settings, moves the quiz to the file's module and replaces the questions that differ from the file's, leaving the rest alone. When it changes questions on a published quiz, students keep getting the old ones until you click Save it now on the quiz page in Canvas (the API can't do that). If students have started, it warns first: they keep the questions they got and are not regraded. It refuses to change the point total they were scored out of."
     >
       {versions?.map((v, i) => (
         <VersionSection

@@ -690,3 +690,37 @@ describe("getSyncStatus - dates Canvas won't save, not in Canvas yet", () => {
     expect(status.problem).toMatch(/^DueAt .* is after LockAt/);
   });
 });
+
+describe("getSyncReport - assigned only to some students", () => {
+  const roster = {
+    students: {
+      students: [
+        { id: 100202, name: "Priya Anand", sortableName: "Anand, Priya", email: "priya.anand@example.edu" },
+        { id: 100203, name: "Owen Brennan", sortableName: "Brennan, Owen", email: "owen.brennan@example.edu" },
+      ],
+      syncedAt: "",
+    },
+  };
+  // Canvas: two students, no "everyone else" date, so no due date of its own
+  const canvasItem: CanvasAssignment = {
+    ...baseCanvasAssignment,
+    due_at: undefined as never,
+    only_visible_to_overrides: true,
+    has_overrides: true,
+    overrides: [
+      { id: 9, assignment_id: 1, course_section_id: 0, title: "2 students", student_ids: [100202, 100203], due_at: "2023-08-22T05:59:00Z" },
+    ],
+  } as never;
+  const report = (item: LocalAssignment) =>
+    getSyncReport({ item, canvasItem, type: "assignment", settings: baseSettings, roster });
+
+  it("without a Schedule, notes that Canvas gives it to only some students, as no difference: Update leaves that to Canvas", () => {
+    const { fields, differences } = report(baseLocalAssignment);
+    expect(differences).toEqual([]);
+    expect(fields.find((f) => f.key === "assignedTo")).toMatchObject({
+      local: "set in Canvas",
+      canvas: "only 2 students",
+      same: true,
+    });
+  });
+});

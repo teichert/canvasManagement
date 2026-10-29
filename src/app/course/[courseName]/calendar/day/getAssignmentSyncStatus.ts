@@ -583,6 +583,29 @@ export function getScheduleEntryStatus(
   };
 }
 
+/**
+ * Canvas giving the assignment to only some students (overrides, no date
+ * for everyone else). Update leaves who gets it to Canvas, so this is a
+ * note, not a difference.
+ */
+function checkAssignedTo(canvasAssignment: CanvasAssignment): SyncField | undefined {
+  if (!canvasAssignment.only_visible_to_overrides) return undefined;
+  const students = new Set(
+    (canvasAssignment.overrides ?? []).flatMap((o) => o.student_ids ?? []),
+  ).size;
+  return field({
+    key: "assignedTo",
+    label: "Assigned to",
+    section: "schedule",
+    local: "set in Canvas",
+    canvas:
+      students > 0
+        ? `only ${students} student${students === 1 ? "" : "s"}`
+        : "only some sections",
+    same: true,
+  });
+}
+
 function checkSchedule(
   assignment: LocalAssignment,
   canvasAssignment: CanvasAssignment,
@@ -661,14 +684,19 @@ function checkAssignment(
   if (unlock) fields.push(unlock);
   fields.push(...checkGroupSet(assignment, canvasAssignment, roster));
   fields.push(...checkSchedule(assignment, canvasAssignment, roster));
-  fields.push(
-    ...checkDueDateAndLock(
-      assignment.dueAt,
-      assignment.lockAt,
-      canvasAssignment.due_at,
-      canvasAssignment.lock_at,
-    ),
-  );
+  const assignedTo = checkAssignedTo(canvasAssignment);
+  if (assignedTo) fields.push(assignedTo);
+  // given only to some students, Canvas keeps no dates of its own: the
+  // overrides carry them, and the schedule compares those
+  if (!canvasAssignment.only_visible_to_overrides)
+    fields.push(
+      ...checkDueDateAndLock(
+        assignment.dueAt,
+        assignment.lockAt,
+        canvasAssignment.due_at,
+        canvasAssignment.lock_at,
+      ),
+    );
   const group = checkAssignmentGroup(
     assignment.localAssignmentGroupName,
     canvasAssignment.assignment_group_id,
