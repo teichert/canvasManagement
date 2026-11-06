@@ -26,19 +26,38 @@ const useInvalidateErrorLog = () => {
     queryClient.invalidateQueries({ queryKey: trpc.errorLog.list.queryKey() });
 };
 
+/** Changes the list on screen at once, before the server answers; the refetch after confirms it. */
+const useChangeListNow = () => {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  type List = { entries: { id: string }[]; canExplain: boolean };
+  return (change: (entries: List["entries"]) => List["entries"]) =>
+    queryClient.setQueryData(trpc.errorLog.list.queryKey(), (list: List | undefined) =>
+      list && { ...list, entries: change(list.entries) },
+    );
+};
+
 export const useDismissErrorMutation = () => {
   const trpc = useTRPC();
   const invalidate = useInvalidateErrorLog();
+  const changeNow = useChangeListNow();
   return useMutation(
-    trpc.errorLog.dismiss.mutationOptions({ onSuccess: invalidate }),
+    trpc.errorLog.dismiss.mutationOptions({
+      onMutate: (id) => changeNow((entries) => entries.filter((e) => e.id !== id)),
+      onSettled: invalidate,
+    }),
   );
 };
 
 export const useClearErrorsMutation = () => {
   const trpc = useTRPC();
   const invalidate = useInvalidateErrorLog();
+  const changeNow = useChangeListNow();
   return useMutation(
-    trpc.errorLog.clear.mutationOptions({ onSuccess: invalidate }),
+    trpc.errorLog.clear.mutationOptions({
+      onMutate: () => changeNow(() => []),
+      onSettled: invalidate,
+    }),
   );
 };
 
