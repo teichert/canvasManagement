@@ -14,7 +14,7 @@ import { ModuleCanvasStatus } from "./ModuleCanvasStatus";
 import ClientOnly from "@/components/ClientOnly";
 import { useDraggingContext } from "../context/drag/draggingContext";
 import { Link } from "@tanstack/react-router";
-import { getModuleItemUrl } from "@/services/urlUtils";
+import { getLectureUrl, getModuleItemUrl } from "@/services/urlUtils";
 import { useCourseContext } from "../context/courseContext";
 import { Expandable } from "../../../../components/Expandable";
 import { SectionTitle } from "@/components/panes/PaneHeader";
@@ -146,12 +146,13 @@ export default function ExpandableModule({
         ];
       }
       const weekNum = getWeekNumber(startDate, date);
-      const dayName = date.toLocaleDateString("en-US", { weekday: "short" });
+      // the date too, so a day is found without counting weeks: "Week 3 - Mon Sep 8"
+      const day = date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).replace(",", "");
       return [
         ...groups,
         {
           dateKey,
-          weekLabel: `Week ${weekNum} - ${dayName}`,
+          weekLabel: `Week ${weekNum} - ${day}`,
           items: [moduleItem],
         },
       ];
@@ -277,11 +278,16 @@ export default function ExpandableModule({
                     ))}
                   </div>
                 )}
-                {groupedItems.map(({ weekLabel, items }) => (
+                {groupedItems.map(({ dateKey, weekLabel, items }) => (
                   <div key={weekLabel}>
-                    <div className="text-slate-500 text-sm mt-1 ps-1">
+                    {/* the day's heading opens that day's lecture notes */}
+                    <Link
+                      to={getLectureUrl(courseName, dateKey)}
+                      className="block text-slate-500 text-sm mt-1 ps-1 hover:text-slate-200 hover:underline"
+                      title={`Open the lecture notes for ${weekLabel.split(" - ")[1]}`}
+                    >
                       {weekLabel}
-                    </div>
+                    </Link>
                     {items.map(({ type, item }) => {
                       const status = statusOf(type, item, moduleName);
                       const ref = { type, item, moduleName };
