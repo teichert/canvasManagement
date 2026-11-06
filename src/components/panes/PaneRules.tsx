@@ -29,9 +29,11 @@ export function MinRule({
   onMin: (min: number) => void;
 }) {
   // while dragged: the minimum shown, and the pane's width when the drag began
-  // while dragged: the minimum shown, and the pane's width when the drag began
-  const [live, setLive] = useState<{ min: number; width: number } | null>(null);
-  const shown = live?.min ?? min;
+  // the minimum shown while dragged; the pane's width when the drag began,
+  // kept in a ref: pointer events can come faster than React renders
+  const [live, setLive] = useState<number | null>(null);
+  const startWidth = useRef<number | null>(null);
+  const shown = live ?? min;
   // the bar's width, measured (it's in rem), so the rule ends where the minimum does
   const [bar, setBar] = useState(20);
   useLayoutEffect(() => {
@@ -52,23 +54,25 @@ export function MinRule({
         role="slider"
         aria-label={`Narrowest ${label}`}
         aria-valuenow={shown}
-        className="absolute -top-[2.5px] size-1.5 -ml-[3px] rounded-full bg-slate-500 hover:bg-slate-200 cursor-ew-resize touch-none"
+        className="absolute z-40 -top-[2.5px] size-1.5 -ml-[3px] rounded-full bg-slate-500 hover:bg-slate-200 cursor-ew-resize touch-none"
         style={{ left: Math.max(shown - bar, 0) }}
         onPointerDown={(e) => {
           e.preventDefault();
           e.stopPropagation();
           e.currentTarget.setPointerCapture(e.pointerId);
-          setLive({ min, width: paneRef.current?.getBoundingClientRect().width ?? min });
+          startWidth.current = paneRef.current?.getBoundingClientRect().width ?? min;
+          setLive(min);
         }}
         onPointerMove={(e) => {
-          if (!live) return;
+          if (startWidth.current === null) return;
           const next = at(e);
-          setLive({ ...live, min: next });
-          onWiden(Math.max(next - live.width, 0));
+          setLive(next);
+          onWiden(Math.max(next - startWidth.current, 0));
         }}
         onPointerUp={(e) => {
           e.currentTarget.releasePointerCapture(e.pointerId);
-          if (live) onMin(at(e));
+          if (startWidth.current !== null) onMin(at(e));
+          startWidth.current = null;
           setLive(null);
         }}
       />
@@ -86,6 +90,8 @@ export function MinRule({
 export function MaxRule({ label, maxWidth, onMax }: { label: string; maxWidth: number; onMax: (max: number | undefined) => void }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [live, setLive] = useState<number | null>(null);
+  // whether it's being dragged, in a ref: pointer events can come faster than React renders
+  const dragged = useRef(false);
   // measured, and followed as the pane is resized (a drag sets widths
   // without re-rendering): the pane's width on screen, the rule's room down
   // the bar, and where it starts, below the bar's icon
@@ -117,7 +123,7 @@ export function MaxRule({ label, maxWidth, onMax }: { label: string; maxWidth: n
   };
   const maxFor = (l: number) => maxWidthFor(l, width, bar, height);
   return (
-    <div ref={ref} className="absolute -right-px w-1" style={{ top: box.top, height }}>
+    <div ref={ref} className="absolute right-0.5 w-1.5 z-40" style={{ top: box.top, height }}>
       <div className="absolute top-0 right-0 w-px bg-slate-700" style={{ height: length }} />
       {/* while dragged: the diagonal whose length is the bound, from the end to the pane's top-right corner */}
       {live !== null && (
@@ -133,22 +139,24 @@ export function MaxRule({ label, maxWidth, onMax }: { label: string; maxWidth: n
         aria-label={`Widest ${label}`}
         aria-valuetext={Number.isFinite(maxWidth) ? `${Math.round(maxWidth)} px` : "no limit"}
         title={`${label} can't be made wider than the distance from here to its top-right corner: drag up or down (to the bottom: no limit)`}
-        className="absolute -right-[2.5px] size-1.5 -mt-[3px] rounded-full bg-slate-500 hover:bg-slate-200 cursor-ns-resize touch-none"
+        className="absolute right-0 size-1.5 -mt-[3px] rounded-full bg-slate-500 hover:bg-slate-200 cursor-ns-resize touch-none"
         style={{ top: length }}
         onPointerDown={(e) => {
           e.preventDefault();
           e.stopPropagation();
           e.currentTarget.setPointerCapture(e.pointerId);
+          dragged.current = true;
           setLive(at(e));
         }}
         onPointerMove={(e) => {
           e.stopPropagation();
-          if (live !== null) setLive(at(e));
+          if (dragged.current) setLive(at(e));
         }}
         onPointerUp={(e) => {
           e.stopPropagation();
           e.currentTarget.releasePointerCapture(e.pointerId);
-          if (live !== null) onMax(maxFor(at(e)));
+          if (dragged.current) onMax(maxFor(at(e)));
+          dragged.current = false;
           setLive(null);
         }}
       />
