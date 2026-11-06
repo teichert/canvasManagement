@@ -1,5 +1,5 @@
 "use client";
-import { useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { PopOutIcon } from "../icons/ActionIcons";
 import { openPopOut } from "@/app/course/[courseName]/panes/popOut";
 
@@ -7,7 +7,7 @@ import { openPopOut } from "@/app/course/[courseName]/panes/popOut";
 const dragThreshold = 4;
 
 const barClass =
-  "max-md:hidden flex-none select-none w-5 py-2 flex flex-col items-center gap-1 rounded border text-xs font-semibold ";
+  "relative max-md:hidden flex-none select-none w-5 py-2 flex flex-col items-center gap-1 rounded border text-xs font-semibold ";
 
 /**
  * A pane's bar, on its left edge: its name along it, bottom-up. A click
@@ -18,6 +18,9 @@ const barClass =
 export function PaneBar({
   label,
   collapsed,
+  width,
+  maxWidth,
+  onMax,
   popOutHref,
   onToggle,
   onHide,
@@ -26,6 +29,10 @@ export function PaneBar({
 }: {
   label: string;
   collapsed: boolean;
+  /** How wide the pane is, and the widest it may be made (Infinity: no limit), for the max rule. */
+  width: number;
+  maxWidth: number;
+  onMax: (max: number | undefined) => void;
   /** The pane in its own window: what the page shows, and which pane. */
   popOutHref: { pathname: string; pane: string };
   onToggle: () => void;
@@ -84,6 +91,7 @@ export function PaneBar({
       {popOut}
       {name}
       {collapsed && hide}
+      {!collapsed && <MaxRule label={label} width={width} maxWidth={maxWidth} onMax={onMax} />}
     </div>
   );
 }
@@ -124,5 +132,62 @@ export function HideButton({ label, onHide }: { label: string; onHide: () => voi
     >
       ×
     </button>
+  );
+}
+
+/**
+ * The pane's widest width, as a rule down the right of its bar: the
+ * distance from the rule's end to the open pane's top-right corner is the
+ * maximum, so the end moves by itself as the pane is resized, and reaches
+ * the top when the pane is as wide as it may be. Dragging the end sets the
+ * maximum; dragged to the bottom, there is none.
+ */
+function MaxRule({ label, width, maxWidth, onMax }: { label: string; width: number; maxWidth: number; onMax: (max: number | undefined) => void }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [live, setLive] = useState<number | null>(null);
+  // the rule's room down the bar, measured
+  const [height, setHeight] = useState(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => setHeight(el.getBoundingClientRect().height));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const fromMax = Number.isFinite(maxWidth) ? Math.sqrt(Math.max(maxWidth * maxWidth - width * width, 0)) : Infinity;
+  const length = Math.min(live ?? fromMax, height);
+  const at = (e: React.PointerEvent) => {
+    const box = ref.current?.getBoundingClientRect();
+    return box ? Math.min(Math.max(e.clientY - box.top, 0), box.height) : 0;
+  };
+  const maxFor = (l: number) => (l >= height - 4 ? undefined : Math.round(Math.sqrt(width * width + l * l)));
+  return (
+    <div ref={ref} className="absolute top-1 bottom-6 -right-px w-1" aria-hidden={false}>
+      <div className="absolute top-0 right-0 w-px bg-slate-600" style={{ height: length }} />
+      <div
+        role="slider"
+        aria-label={`Widest ${label}`}
+        aria-valuetext={Number.isFinite(maxWidth) ? `${Math.round(maxWidth)} px` : "no limit"}
+        title={`${label} can't be made wider than the distance from here to its top-right corner: drag up or down (to the bottom: no limit)`}
+        className="absolute -right-1 size-2.5 -mt-1 rounded-full bg-slate-500 hover:bg-slate-200 cursor-ns-resize touch-none"
+        style={{ top: length }}
+        onPointerDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          e.currentTarget.setPointerCapture(e.pointerId);
+          setLive(at(e));
+        }}
+        onPointerMove={(e) => {
+          e.stopPropagation();
+          if (live !== null) setLive(at(e));
+        }}
+        onPointerUp={(e) => {
+          e.stopPropagation();
+          e.currentTarget.releasePointerCapture(e.pointerId);
+          if (live !== null) onMax(maxFor(at(e)));
+          setLive(null);
+        }}
+      />
+    </div>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { movePane, paneActions, PaneSpec, parseDoc, showingPane, viewPanes, widthRule } from "./paneStore";
+import { fitOpening, moveEdge, movePane, paneActions, PaneSpec, parseDoc, shareRow, showingPane, viewPanes, widthRule } from "./paneStore";
 
 const spec = (id: string, extra: Partial<PaneSpec> = {}): PaneSpec => ({
   id,
@@ -84,5 +84,47 @@ describe("paneActions", () => {
 
   it("reset forgets everything", () => {
     expect(paneActions.reset()).toEqual({});
+  });
+});
+
+describe("moveEdge", () => {
+  const p = (id: string, width: number, minWidth = 100, maxWidth = Infinity) => ({ id, width, minWidth, maxWidth });
+  it("right: the empty room goes first, so the panes after are shoved over unchanged", () => {
+    expect(moveEdge([p("a", 300), p("b", 300)], 1, 50, 80)).toEqual({ a: 350, b: 300 });
+  });
+  it("right: past the empty room, the panes after shrink nearest first, each to its min", () => {
+    expect(moveEdge([p("a", 300), p("b", 150), p("c", 300)], 1, 200, 20)).toEqual({ a: 500, b: 100, c: 170 });
+  });
+  it("right: the panes before grow nearest first, each to its max", () => {
+    expect(moveEdge([p("a", 300), p("b", 300, 100, 320), p("c", 300)], 2, 50, 100)).toEqual({ a: 330, b: 320, c: 300 });
+  });
+  it("left: the panes before shrink nearest first to their min, the panes after grow to their max, the rest is empty room", () => {
+    expect(moveEdge([p("a", 300), p("b", 150), p("c", 300, 100, 340)], 2, -100, 0)).toEqual({ a: 250, b: 100, c: 340 });
+  });
+});
+
+describe("fitOpening", () => {
+  const p = (id: string, width: number, minWidth = 100) => ({ id, width, minWidth, maxWidth: Infinity });
+  it("takes the empty room first and changes nobody when it's enough", () => {
+    expect(fitOpening([p("a", 300), p("new", 300)], "new", 277, 300, 23)).toEqual({ widths: { a: 300, new: 300 }, collapse: [] });
+  });
+  it("then shrinks the others, those after it first, to their min", () => {
+    expect(fitOpening([p("a", 300), p("new", 300), p("c", 300)], "new", 277, 0, 23).widths).toEqual({ a: 223, new: 300, c: 100 });
+  });
+  it("then closes open panes from the right, not the one opening", () => {
+    expect(fitOpening([p("a", 100), p("new", 300), p("c", 100)], "new", 277, 0, 23)).toEqual({ widths: { new: 300 }, collapse: ["c", "a"] });
+  });
+});
+
+describe("shareRow", () => {
+  const p = (id: string, minWidth: number, maxWidth = Infinity) => ({ id, width: 0, minWidth, maxWidth });
+  it("gives each its min, then shares the rest by headroom, nobody past its max", () => {
+    const { widths, collapse } = shareRow([p("a", 100, 200), p("b", 100)], 1000, 20);
+    expect(collapse).toEqual([]);
+    expect(widths.a).toBeCloseTo(180);
+    expect(widths.b).toBeCloseTo(820);
+  });
+  it("collapses a pane whose min doesn't fit, handing mins out from the left", () => {
+    expect(shareRow([p("a", 500), p("b", 500)], 700, 20).collapse).toEqual(["b"]);
   });
 });

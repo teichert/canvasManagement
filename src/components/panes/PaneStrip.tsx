@@ -11,6 +11,7 @@ import {
 } from "react";
 import { remember, subscribeToStorage } from "../storage";
 import {
+  fitOpening,
   isShown,
   paneActions,
   PaneDoc,
@@ -18,7 +19,9 @@ import {
   PaneSpec,
   PaneView,
   parseDoc,
+  shareRow,
   showingPane,
+  Sized,
   viewPanes,
 } from "./paneStore";
 
@@ -28,19 +31,41 @@ export const paneElement = (id: string) => document.querySelector<HTMLElement>(`
 export const renderedWidths = (panes: PaneView[]) =>
   Object.fromEntries(panes.filter(isShown).map((p) => [p.id, paneElement(p.id)?.getBoundingClientRect().width ?? p.width]));
 
-/**
- * The room shared out among the panes whose bars are on the page, for All:
- * what's left of the row once every bar has its width, in equal parts
- * (until min and max widths exist to share it by).
- */
+/** The open panes as the sizing rules see them, at their widths on the page. */
+export const sized = (panes: PaneView[]): Sized[] => {
+  const widths = renderedWidths(panes);
+  return panes.filter(isShown).map((p) => ({ id: p.id, width: widths[p.id], minWidth: p.minWidth, maxWidth: p.maxWidth }));
+};
+
+const rowOf = (panes: PaneView[]) => panes.map((p) => paneElement(p.id)?.parentElement).find(Boolean);
+
+/** The room left empty at the end of the panes' row. */
+export const emptyRoom = (panes: PaneView[]) => {
+  const row = rowOf(panes);
+  if (!row) return 0;
+  const end = Math.max(...[...row.children].map((el) => el.getBoundingClientRect().right));
+  return Math.max(row.getBoundingClientRect().right - end, 0);
+};
+
+/** How wide a collapsed pane is: its bar. */
+const barWidth = (panes: PaneView[]) => {
+  const collapsed = panes.find((p) => !p.hidden && p.collapsed);
+  const el = collapsed ? paneElement(collapsed.id) : paneElement(panes.find((p) => !p.hidden)?.id ?? "")?.firstElementChild;
+  return el?.getBoundingClientRect().width ?? 23;
+};
+
+/** All: the room of the row shared out among the panes whose bars are on the page (see shareRow). */
 function sharedWidths(panes: PaneView[]) {
   const shown = panes.filter((p) => !p.hidden);
-  const row = shown.map((p) => paneElement(p.id)?.parentElement).find(Boolean);
-  if (!row) return {};
-  const bars = shown.reduce((sum, p) => sum + (paneElement(p.id)?.firstElementChild?.getBoundingClientRect().width ?? 0), 0);
-  const gaps = row.clientWidth - [...row.children].reduce((sum, el) => sum + (el as HTMLElement).offsetWidth, 0);
-  const each = (row.clientWidth - bars - Math.max(gaps, 0)) / shown.length;
-  return Object.fromEntries(shown.map((p) => [p.id, Math.max(each, p.minWidth)]));
+  const row = rowOf(panes);
+  if (!row) return { widths: {}, collapse: [] };
+  const gap = parseFloat(getComputedStyle(row).columnGap) || 0;
+  const room = row.clientWidth - gap * Math.max(shown.length - 1, 0);
+  return shareRow(
+    shown.map((p) => ({ id: p.id, width: p.width, minWidth: p.minWidth, maxWidth: p.maxWidth })),
+    room,
+    barWidth(panes),
+  );
 }
 
 type Strip = {
@@ -135,12 +160,33 @@ export function usePanes() {
     narrow,
     showing,
     setHidden: (id: string, hidden: boolean) => update((d) => paneActions.setHidden(d, id, hidden)),
-    setCollapsed: (id: string, collapsed: boolean) => update((d) => paneActions.setCollapsed(frozen(d), id, collapsed)),
+    /** Opening makes room as a drag would: the empty room first, then the others shrink to their min, then close from the right (see fitOpening). */
+    setCollapsed: (id: string, collapsed: boolean) => {
+      const pane = panes.find((p) => p.id === id);
+      if (collapsed || narrow || !pane) return update((d) => paneActions.setCollapsed(frozen(d), id, collapsed));
+      const bar = barWidth(panes);
+      const opening = sized(panes.map((p) => (p.id === id ? { ...p, collapsed: false } : p)));
+      const self = opening.find((p) => p.id === id);
+      if (self) self.width = Math.max(pane.width, pane.minWidth);
+      const { widths, collapse } = fitOpening(opening, id, (self?.width ?? pane.width) - bar, emptyRoom(panes), bar);
+      update((d) =>
+        paneActions.setCollapsed(
+          collapse.reduce((doc, other) => paneActions.setCollapsed(doc, other, true), paneActions.setWidths(d, widths)),
+          id,
+          false,
+        ),
+      );
+    },
+    /** The narrowest and widest the pane may be made. */
+    setLimits: (id: string, limits: { min?: number; max?: number }) => update((d) => paneActions.setLimits(d, id, limits)),
     /** This pane open, the rest collapsed: on a phone, the one showing. */
     jumpTo: (id: string) => update((d) => paneActions.jumpTo(frozen(d), ids, id)),
     setAllCollapsed: (collapsed: boolean) => update((d) => paneActions.setAllCollapsed(frozen(d), ids, collapsed)),
     /** Every pane on the page open, the room shared out among them. */
-    openAll: () => update((d) => paneActions.openAll(d, sharedWidths(panes))),
+    openAll: () => {
+      const { widths, collapse } = sharedWidths(panes);
+      update((d) => paneActions.openAll(d, widths, collapse));
+    },
     setAllHidden: (hidden: boolean) => update((d) => paneActions.setAllHidden(d, ids, hidden)),
     setWidths: (widths: Record<string, number>) => update((d) => paneActions.setWidths(d, widths)),
     move: (id: string, index: number) => update((d) => paneActions.move(d, ids, id, index)),
