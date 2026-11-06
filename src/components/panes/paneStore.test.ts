@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fitOpening, moveEdge, movePane, paneActions, PaneSpec, parseDoc, shareRow, showingPane, viewPanes, widthRule } from "./paneStore";
+import { fitOpening, maxWidthFor, moveEdge, movePane, paneActions, PaneSpec, parseDoc, ruleLengthFor, shareRow, showingPane, viewPanes, widthRule } from "./paneStore";
 
 const spec = (id: string, extra: Partial<PaneSpec> = {}): PaneSpec => ({
   id,
@@ -126,5 +126,17 @@ describe("shareRow", () => {
   });
   it("collapses a pane whose min doesn't fit, handing mins out from the left", () => {
     expect(shareRow([p("a", 500), p("b", 500)], 700, 20).collapse).toEqual(["b"]);
+  });
+});
+
+describe("the max rule", () => {
+  it("is as long as the drop from the corner that makes the bound, bar included", () => {
+    expect(ruleLengthFor(520, 320, 20)).toBeCloseTo(400);
+    expect(maxWidthFor(400, 320, 20, 900)).toBe(520);
+  });
+  it("is empty when the pane is as wide as it may be, and no bound at its full length", () => {
+    expect(ruleLengthFor(320, 320, 20)).toBe(0);
+    expect(ruleLengthFor(Infinity, 320, 20)).toBe(Infinity);
+    expect(maxWidthFor(898, 320, 20, 900)).toBeUndefined();
   });
 });

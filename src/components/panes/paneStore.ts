@@ -82,11 +82,12 @@ export const showingPane = (panes: PaneView[]) => (panes.find(isShown) ?? panes.
 /**
  * An open pane in the row, as flexbox terms: exactly its width, so opening
  * or closing a pane only shifts the others and room nobody takes stays
- * empty. When the row is too narrow for every width, the panes give way
- * from the right (a shrink weight that climbs steeply with the pane's
- * place, so the rightmost gives way almost entirely before the next one
- * starts to), each down to its minimum. The room is shared out only by All
- * (see openAll).
+ * empty. The rules below (moveEdge, fitOpening, shareRow) decide the widths
+ * whenever the user acts; this only matters when the row itself changes
+ * under them (the window is resized): too narrow for every width, the panes
+ * give way from the right (a shrink weight that climbs steeply with the
+ * pane's place, so the rightmost gives way almost entirely before the next
+ * one starts to), each down to its minimum.
  */
 export const widthRule = (pane: { minWidth: number; width: number }, place: number) => {
   const width = Math.max(pane.width, pane.minWidth);
@@ -194,6 +195,17 @@ export function shareRow(panes: Sized[], room: number, bar: number) {
   }
   return { widths, collapse };
 }
+
+/**
+ * The max rule (see PaneRules): the bound is the bar plus the distance from
+ * the rule's end to the pane's top-right corner, across the pane's content
+ * and down the rule. So the rule's length for a bound, and the bound for a
+ * length; a rule as long as it can be (`room`) means no bound.
+ */
+export const ruleLengthFor = (maxWidth: number, width: number, bar: number) =>
+  Number.isFinite(maxWidth) ? Math.sqrt(Math.max((maxWidth - bar) ** 2 - Math.max(width - bar, 0) ** 2, 0)) : Infinity;
+export const maxWidthFor = (length: number, width: number, bar: number, room: number) =>
+  length >= room - 4 ? undefined : Math.round(bar + Math.sqrt(Math.max(width - bar, 0) ** 2 + length ** 2));
 
 /** `order` with `id` moved to `index`. */
 export function movePane(order: string[], id: string, index: number): string[] {

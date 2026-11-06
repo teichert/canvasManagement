@@ -1,6 +1,8 @@
 "use client";
 import { CSSProperties, ReactNode, RefObject, useLayoutEffect, useRef, useState } from "react";
-import { emptyRoom, paneElement, sized, usePaneRegistration, usePanes } from "./PaneStrip";
+import { usePaneRegistration, usePanes } from "./PaneStrip";
+import { measureRow, paneElement } from "./measureRow";
+import { MinRule } from "./PaneRules";
 import { HideButton, PaneBar } from "./PaneBar";
 import { useRouterState } from "@tanstack/react-router";
 import { moveEdge, Sized, widthRule } from "./paneStore";
@@ -82,12 +84,12 @@ export function Pane({
   }, [minWidth, width, place, hidden]);
   // while a bar is dragged, the open panes are resized live from how they
   // were when it started; the widths are remembered on release
-  const dragging = useRef<{ startX: number; open: Sized[]; free: number; now?: Record<string, number> } | null>(null);
+  const dragging = useRef<{ open: Sized[]; free: number; now?: Record<string, number> } | null>(null);
   const effectiveMin = view?.minWidth ?? minWidth;
   /** Moves the edge before the first open pane at or after `from` by `dx` from where it was when this drag began (see moveEdge), live. */
   const dragEdge = (from: number, dx: number) => {
     // every open pane as wide as it is now, and the empty room at the end of the row
-    if (!dragging.current) dragging.current = { startX: 0, open: sized(panes), free: emptyRoom(panes) };
+    if (!dragging.current) dragging.current = measureRow(panes);
     const { open, free } = dragging.current;
     const k = open.findIndex((p) => panes.findIndex((q) => q.id === p.id) >= from);
     const now = moveEdge(open, k === -1 ? open.length : k, dx, free);
@@ -169,75 +171,6 @@ export function Pane({
           {mounted && children}
         </div>
       </div>
-    </div>
-  );
-}
-
-/**
- * The pane's narrowest width, as a rule under its name: the rule runs from
- * the pane's left edge as far as the minimum, and dragging its end sets it.
- * Dragged past the pane's width, the pane widens with it (`onWiden`, the
- * width beyond); dragged back, only the minimum comes back, the pane keeps
- * its width.
- */
-function MinRule({
-  paneRef,
-  min,
-  floor,
-  label,
-  onWiden,
-  onMin,
-}: {
-  paneRef: RefObject<HTMLDivElement | null>;
-  min: number;
-  floor: number;
-  label: string;
-  onWiden: (dx: number) => void;
-  onMin: (min: number) => void;
-}) {
-  // while dragged: the minimum shown, and the pane's width when the drag began
-  const [live, setLive] = useState<{ min: number; width: number } | null>(null);
-  const shown = live?.min ?? min;
-  // the bar's width, measured (it's in rem), so the rule ends where the minimum does
-  const [bar, setBar] = useState(20);
-  useLayoutEffect(() => {
-    const el = paneRef.current?.firstElementChild;
-    if (!el) return;
-    const observer = new ResizeObserver(() => setBar(el.getBoundingClientRect().width));
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [paneRef]);
-  const at = (e: React.PointerEvent) => {
-    const box = paneRef.current?.getBoundingClientRect();
-    return box ? Math.round(Math.max(e.clientX - box.left, floor)) : min;
-  };
-  return (
-    <div className="max-md:hidden relative h-1 flex-none" title={`${label} can't be made narrower than this rule: drag its end`}>
-      <div className="absolute top-0 left-0 h-px bg-slate-700" style={{ width: Math.max(shown - bar, 0) }} />
-      <div
-        role="slider"
-        aria-label={`Narrowest ${label}`}
-        aria-valuenow={shown}
-        className="absolute -top-[2.5px] size-1.5 -ml-[3px] rounded-full bg-slate-500 hover:bg-slate-200 cursor-ew-resize touch-none"
-        style={{ left: Math.max(shown - bar, 0) }}
-        onPointerDown={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          e.currentTarget.setPointerCapture(e.pointerId);
-          setLive({ min, width: paneRef.current?.getBoundingClientRect().width ?? min });
-        }}
-        onPointerMove={(e) => {
-          if (!live) return;
-          const next = at(e);
-          setLive({ ...live, min: next });
-          onWiden(Math.max(next - live.width, 0));
-        }}
-        onPointerUp={(e) => {
-          e.currentTarget.releasePointerCapture(e.pointerId);
-          if (live) onMin(at(e));
-          setLive(null);
-        }}
-      />
     </div>
   );
 }

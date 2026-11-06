@@ -10,9 +10,9 @@ import {
   useSyncExternalStore,
 } from "react";
 import { remember, subscribeToStorage } from "../storage";
+import { measureRow, Row } from "./measureRow";
 import {
   fitOpening,
-  isShown,
   paneActions,
   PaneDoc,
   paneDocKey,
@@ -21,50 +21,28 @@ import {
   parseDoc,
   shareRow,
   showingPane,
-  Sized,
   viewPanes,
 } from "./paneStore";
 
-export const paneElement = (id: string) => document.querySelector<HTMLElement>(`[data-pane="${id}"]`);
-
-/** Every open pane's width as it is on the page right now. */
-export const renderedWidths = (panes: PaneView[]) =>
-  Object.fromEntries(panes.filter(isShown).map((p) => [p.id, paneElement(p.id)?.getBoundingClientRect().width ?? p.width]));
-
-/** The open panes as the sizing rules see them, at their widths on the page. */
-export const sized = (panes: PaneView[]): Sized[] => {
-  const widths = renderedWidths(panes);
-  return panes.filter(isShown).map((p) => ({ id: p.id, width: widths[p.id], minWidth: p.minWidth, maxWidth: p.maxWidth }));
-};
-
-const rowOf = (panes: PaneView[]) => panes.map((p) => paneElement(p.id)?.parentElement).find(Boolean);
-
-/** The room left empty at the end of the panes' row. */
-export const emptyRoom = (panes: PaneView[]) => {
-  const row = rowOf(panes);
-  if (!row) return 0;
-  const end = Math.max(...[...row.children].map((el) => el.getBoundingClientRect().right));
-  return Math.max(row.getBoundingClientRect().right - end, 0);
-};
-
-/** How wide a collapsed pane is: its bar. */
-const barWidth = (panes: PaneView[]) => {
-  const collapsed = panes.find((p) => !p.hidden && p.collapsed);
-  const el = collapsed ? paneElement(collapsed.id) : paneElement(panes.find((p) => !p.hidden)?.id ?? "")?.firstElementChild;
-  return el?.getBoundingClientRect().width ?? 23;
-};
-
-/** All: the room of the row shared out among the panes whose bars are on the page (see shareRow). */
-function sharedWidths(panes: PaneView[]) {
-  const shown = panes.filter((p) => !p.hidden);
-  const row = rowOf(panes);
-  if (!row) return { widths: {}, collapse: [] };
-  const gap = parseFloat(getComputedStyle(row).columnGap) || 0;
-  const room = row.clientWidth - gap * Math.max(shown.length - 1, 0);
-  return shareRow(
-    shown.map((p) => ({ id: p.id, width: p.width, minWidth: p.minWidth, maxWidth: p.maxWidth })),
-    room,
-    barWidth(panes),
+/**
+ * The document with `id` opened, room made as a drag would make it (see
+ * fitOpening): the empty room first, then the other open panes narrowed to
+ * their narrowest, those after it first, then open panes closed from the
+ * right. On a phone, or without a row to measure, simply shown.
+ */
+function openWithRoom(doc: PaneDoc, panes: PaneView[], row: Row | undefined, id: string): PaneDoc {
+  const pane = panes.find((p) => p.id === id);
+  if (!pane || !row) return paneActions.show(doc, id);
+  const measured = Object.fromEntries(row.open.map((p) => [p.id, p.width]));
+  const opening = panes
+    .filter((p) => measured[p.id] !== undefined || p.id === id)
+    .map((p) => ({ id: p.id, width: p.id === id ? Math.max(p.width, p.minWidth) : measured[p.id], minWidth: p.minWidth, maxWidth: p.maxWidth }));
+  // a hidden pane has no bar on the page yet: it needs its bar's room too
+  const need = Math.max(pane.width, pane.minWidth) - (pane.hidden ? 0 : row.bar);
+  const { widths, collapse } = fitOpening(opening, id, need, row.free, row.bar);
+  return paneActions.show(
+    collapse.reduce((d, other) => paneActions.setCollapsed(d, other, true), paneActions.setWidths(doc, widths)),
+    id,
   );
 }
 
@@ -151,31 +129,25 @@ export const showPane = (id: string) =>
 export function usePanes() {
   const { panes, narrow, showing, update } = useContext(StripContext);
   const ids = panes.map((p) => p.id);
+  // measured when acted on, never while rendering; on a phone the widths
+  // are the screen's and aren't kept
+  const row = () => (narrow ? undefined : measureRow(panes));
   // a toggle keeps every open pane at the width it has (a pane the row had
-  // squeezed stays as it was), so the toggle only shifts the others; on a
-  // phone the widths are the screen's and aren't kept
-  const frozen = (doc: PaneDoc) => (narrow ? doc : paneActions.setWidths(doc, renderedWidths(panes)));
+  // squeezed stays as it was), so the toggle only shifts the others
+  const frozen = (doc: PaneDoc) => {
+    const r = row();
+    return r ? paneActions.setWidths(doc, Object.fromEntries(r.open.map((p) => [p.id, p.width]))) : doc;
+  };
   return {
     panes,
     narrow,
     showing,
     setHidden: (id: string, hidden: boolean) => update((d) => paneActions.setHidden(d, id, hidden)),
-    /** Opening makes room as a drag would: the empty room first, then the others shrink to their min, then close from the right (see fitOpening). */
+    /** Opening makes room as a drag would (see openWithRoom); closing only shifts the others. */
     setCollapsed: (id: string, collapsed: boolean) => {
-      const pane = panes.find((p) => p.id === id);
-      if (collapsed || narrow || !pane) return update((d) => paneActions.setCollapsed(frozen(d), id, collapsed));
-      const bar = barWidth(panes);
-      const opening = sized(panes.map((p) => (p.id === id ? { ...p, collapsed: false } : p)));
-      const self = opening.find((p) => p.id === id);
-      if (self) self.width = Math.max(pane.width, pane.minWidth);
-      const { widths, collapse } = fitOpening(opening, id, (self?.width ?? pane.width) - bar, emptyRoom(panes), bar);
-      update((d) =>
-        paneActions.setCollapsed(
-          collapse.reduce((doc, other) => paneActions.setCollapsed(doc, other, true), paneActions.setWidths(d, widths)),
-          id,
-          false,
-        ),
-      );
+      if (collapsed || narrow) return update((d) => paneActions.setCollapsed(frozen(d), id, collapsed));
+      const r = row();
+      update((d) => openWithRoom(d, panes, r, id));
     },
     /** The narrowest and widest the pane may be made. */
     setLimits: (id: string, limits: { min?: number; max?: number }) => update((d) => paneActions.setLimits(d, id, limits)),
@@ -184,7 +156,9 @@ export function usePanes() {
     setAllCollapsed: (collapsed: boolean) => update((d) => paneActions.setAllCollapsed(frozen(d), ids, collapsed)),
     /** Every pane on the page open, the room shared out among them. */
     openAll: () => {
-      const { widths, collapse } = sharedWidths(panes);
+      const r = row();
+      if (!r) return update((d) => paneActions.setAllCollapsed(d, ids, false));
+      const { widths, collapse } = shareRow(panes.filter((p) => !p.hidden), r.room, r.bar);
       update((d) => paneActions.openAll(d, widths, collapse));
     },
     setAllHidden: (hidden: boolean) => update((d) => paneActions.setAllHidden(d, ids, hidden)),

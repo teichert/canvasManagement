@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { usePanes } from "./PaneStrip";
 import { CaretDownIcon, CheckMarkIcon, PanesIcon } from "../icons/ActionIcons";
-import { PopOutLink } from "./PaneBar";
+import { PopOutLink } from "./PopOutLink";
 
 const button =
   "unstyled btn-thin flex-none flex items-center gap-1 rounded border px-2 py-0.5 text-sm border-slate-700 text-slate-400 hover:text-slate-200";

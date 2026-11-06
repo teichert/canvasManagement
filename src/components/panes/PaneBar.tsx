@@ -1,7 +1,7 @@
 "use client";
-import { useLayoutEffect, useRef, useState } from "react";
-import { PopOutIcon } from "../icons/ActionIcons";
-import { openPopOut } from "@/app/course/[courseName]/panes/popOut";
+import { useRef } from "react";
+import { PopOutLink } from "./PopOutLink";
+import { MaxRule } from "./PaneRules";
 
 // pointer travel that counts as a drag rather than a click on the bar
 const dragThreshold = 4;
@@ -94,27 +94,6 @@ export function PaneBar({
   );
 }
 
-/** The link that opens a pane in its own window, following this one (a plain open of the link, from the middle button say, follows nothing). */
-export function PopOutLink({ label, pathname, pane }: { label: string; pathname: string; pane: string }) {
-  return (
-    <a
-      className="flex-none text-slate-500 hover:text-slate-200"
-      href={`${pathname}?pane=${pane}`}
-      target="_blank"
-      aria-label={`Open ${label} in its own window`}
-      title={`${label} in its own window, following this one as you move between items`}
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={(e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        openPopOut(pathname, pane);
-      }}
-    >
-      <PopOutIcon />
-    </a>
-  );
-}
-
 /** The × that takes a pane off the page; the View menu puts it back. */
 export function HideButton({ label, onHide }: { label: string; onHide: () => void }) {
   return (
@@ -130,86 +109,5 @@ export function HideButton({ label, onHide }: { label: string; onHide: () => voi
     >
       ×
     </button>
-  );
-}
-
-/**
- * The pane's widest width, as a rule down the right of its bar: the
- * distance from the rule's end to the open pane's top-right corner is the
- * maximum, so the end moves by itself as the pane is resized, and reaches
- * the top when the pane is as wide as it may be. Dragging the end sets the
- * maximum; dragged to the bottom, there is none.
- */
-function MaxRule({ label, maxWidth, onMax }: { label: string; maxWidth: number; onMax: (max: number | undefined) => void }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [live, setLive] = useState<number | null>(null);
-  // measured, and followed as the pane is resized (a drag sets widths
-  // without re-rendering): the pane's width on screen, the rule's room down
-  // the bar, and where it starts, below the bar's icon
-  const [box, setBox] = useState({ width: 0, height: 0, top: 0, bar: 0 });
-  useLayoutEffect(() => {
-    const el = ref.current;
-    const bar = el?.parentElement;
-    const pane = el?.closest("[data-pane]");
-    if (!el || !bar || !pane) return;
-    const measure = () => {
-      const b = bar.getBoundingClientRect();
-      const icon = bar.querySelector("a")?.getBoundingClientRect();
-      const top = icon ? icon.bottom - b.top + 4 : 4;
-      setBox({ width: pane.getBoundingClientRect().width, height: Math.max(b.height - top - 24, 0), top, bar: b.width });
-    };
-    const observer = new ResizeObserver(measure);
-    observer.observe(pane);
-    observer.observe(bar);
-    return () => observer.disconnect();
-  }, []);
-  const { width, height, bar } = box;
-  // the maximum is the bar plus the distance from the rule's end to the
-  // pane's top-right corner: across the pane's content, down the rule
-  const across = Math.max(width - bar, 0);
-  const fromMax = Number.isFinite(maxWidth) ? Math.sqrt(Math.max((maxWidth - bar) ** 2 - across ** 2, 0)) : Infinity;
-  const length = Math.min(live ?? fromMax, height);
-  const at = (e: React.PointerEvent) => {
-    const rule = ref.current?.getBoundingClientRect();
-    return rule ? Math.min(Math.max(e.clientY - rule.top, 0), height) : 0;
-  };
-  const maxFor = (l: number) => (l >= height - 4 ? undefined : Math.round(bar + Math.sqrt(across ** 2 + l ** 2)));
-  return (
-    <div ref={ref} className="absolute -right-px w-1" style={{ top: box.top, height }}>
-      <div className="absolute top-0 right-0 w-px bg-slate-700" style={{ height: length }} />
-      {/* while dragged: the diagonal whose length is the bound, from the end to the pane's top-right corner */}
-      {live !== null && (
-        <svg className="absolute top-0 left-full pointer-events-none overflow-visible z-20" width={across} height={Math.max(length, 1)}>
-          <line x1={0} y1={length} x2={across} y2={0} className="stroke-slate-400" strokeWidth={1} strokeDasharray="4 3" />
-          <text x={across / 2 + 4} y={length / 2 - 4} className="fill-slate-300 text-[10px]">
-            {length >= height - 4 ? "no limit" : `${maxFor(length)} px`}
-          </text>
-        </svg>
-      )}
-      <div
-        role="slider"
-        aria-label={`Widest ${label}`}
-        aria-valuetext={Number.isFinite(maxWidth) ? `${Math.round(maxWidth)} px` : "no limit"}
-        title={`${label} can't be made wider than the distance from here to its top-right corner: drag up or down (to the bottom: no limit)`}
-        className="absolute -right-[2.5px] size-1.5 -mt-[3px] rounded-full bg-slate-500 hover:bg-slate-200 cursor-ns-resize touch-none"
-        style={{ top: length }}
-        onPointerDown={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          e.currentTarget.setPointerCapture(e.pointerId);
-          setLive(at(e));
-        }}
-        onPointerMove={(e) => {
-          e.stopPropagation();
-          if (live !== null) setLive(at(e));
-        }}
-        onPointerUp={(e) => {
-          e.stopPropagation();
-          e.currentTarget.releasePointerCapture(e.pointerId);
-          if (live !== null) onMax(maxFor(at(e)));
-          setLive(null);
-        }}
-      />
-    </div>
   );
 }
