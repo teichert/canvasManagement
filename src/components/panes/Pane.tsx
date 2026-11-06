@@ -84,6 +84,24 @@ export function Pane({
   // were when it started; the widths are remembered on release
   const dragging = useRef<{ startX: number; open: Sized[]; free: number; now?: Record<string, number> } | null>(null);
   const effectiveMin = view?.minWidth ?? minWidth;
+  /** Moves the edge before the first open pane at or after `from` by `dx` from where it was when this drag began (see moveEdge), live. */
+  const dragEdge = (from: number, dx: number) => {
+    // every open pane as wide as it is now, and the empty room at the end of the row
+    if (!dragging.current) dragging.current = { startX: 0, open: sized(panes), free: emptyRoom(panes) };
+    const { open, free } = dragging.current;
+    const k = open.findIndex((p) => panes.findIndex((q) => q.id === p.id) >= from);
+    const now = moveEdge(open, k === -1 ? open.length : k, dx, free);
+    for (const p of panes) {
+      const element = now[p.id] !== undefined && paneElement(p.id);
+      if (element) applyWidth(element, { minWidth: p.minWidth, width: now[p.id] }, panes.indexOf(p));
+    }
+    dragging.current.now = now;
+  };
+  /** The widths a drag set, remembered. */
+  const endDrag = () => {
+    if (dragging.current?.now) setWidths(dragging.current.now);
+    dragging.current = null;
+  };
   const maxWidth = view?.maxWidth ?? Infinity;
 
   if (hidden) return null;
@@ -106,29 +124,14 @@ export function Pane({
       <PaneBar
         label={label}
         collapsed={collapsed}
-        width={width}
         maxWidth={maxWidth}
         onMax={(max) => setLimits(id, { max })}
         popOutHref={popOutHref}
         onToggle={toggle}
         onHide={hide}
-        onDrag={(e, startX) => {
-          // every open pane as wide as it is now, and the empty room at the end of the row
-          if (!dragging.current) dragging.current = { startX, open: sized(panes), free: emptyRoom(panes) };
-          const { startX: x0, open, free } = dragging.current;
-          // the edge sits before the first open pane at or after this bar (see moveEdge)
-          const k = open.findIndex((p) => panes.findIndex((q) => q.id === p.id) >= place);
-          const now = moveEdge(open, k === -1 ? open.length : k, e.clientX - x0, free);
-          for (const p of panes) {
-            const element = now[p.id] !== undefined && paneElement(p.id);
-            if (element) applyWidth(element, { minWidth: p.minWidth, width: now[p.id] }, panes.indexOf(p));
-          }
-          dragging.current.now = now;
-        }}
-        onDragEnd={() => {
-          if (dragging.current?.now) setWidths(dragging.current.now);
-          dragging.current = null;
-        }}
+        // the bar is the edge before this pane
+        onDrag={(e, startX) => dragEdge(place, e.clientX - startX)}
+        onDragEnd={endDrag}
       />
       <div
         className={"min-w-0 min-h-0 flex flex-col " + (collapsed && !narrow ? "flex-none md:w-0 overflow-hidden" : "flex-1")}
@@ -147,7 +150,20 @@ export function Pane({
           </div>
         )}
         {!collapsed && !narrow && (
-          <MinRule paneRef={paneRef} min={effectiveMin} floor={minWidth} label={label} onMin={(min) => setLimits(id, { min })} />
+          <MinRule
+            paneRef={paneRef}
+            min={effectiveMin}
+            floor={minWidth}
+            label={label}
+            // pushed past the pane's width, the min widens the pane, as if the bar after it were dragged along
+            onWiden={(dx) => dragEdge(place + 1, dx)}
+            onMin={(min) => {
+              // no wider than the pane got: the row may not have had the room
+              const reached = dragging.current?.now?.[id] ?? paneRef.current?.getBoundingClientRect().width ?? min;
+              endDrag();
+              setLimits(id, { min: Math.min(min, Math.round(reached)) });
+            }}
+          />
         )}
         <div ref={bodyRef} className="min-w-0 min-h-0 flex-1 flex flex-col overflow-y-auto">
           {mounted && children}
@@ -159,24 +175,29 @@ export function Pane({
 
 /**
  * The pane's narrowest width, as a rule under its name: the rule runs from
- * the pane's left edge as far as the minimum, and dragging its end sets it,
- * from the pane's own floor up to its width now.
+ * the pane's left edge as far as the minimum, and dragging its end sets it.
+ * Dragged past the pane's width, the pane widens with it (`onWiden`, the
+ * width beyond); dragged back, only the minimum comes back, the pane keeps
+ * its width.
  */
 function MinRule({
   paneRef,
   min,
   floor,
   label,
+  onWiden,
   onMin,
 }: {
   paneRef: RefObject<HTMLDivElement | null>;
   min: number;
   floor: number;
   label: string;
+  onWiden: (dx: number) => void;
   onMin: (min: number) => void;
 }) {
-  const [live, setLive] = useState<number | null>(null);
-  const shown = live ?? min;
+  // while dragged: the minimum shown, and the pane's width when the drag began
+  const [live, setLive] = useState<{ min: number; width: number } | null>(null);
+  const shown = live?.min ?? min;
   // the bar's width, measured (it's in rem), so the rule ends where the minimum does
   const [bar, setBar] = useState(20);
   useLayoutEffect(() => {
@@ -188,29 +209,32 @@ function MinRule({
   }, [paneRef]);
   const at = (e: React.PointerEvent) => {
     const box = paneRef.current?.getBoundingClientRect();
-    return box ? Math.round(Math.min(Math.max(e.clientX - box.left, floor), box.width)) : min;
+    return box ? Math.round(Math.max(e.clientX - box.left, floor)) : min;
   };
   return (
-    <div className="max-md:hidden relative h-1.5 flex-none" title={`${label} can't be made narrower than this rule: drag its end`}>
-      <div className="absolute top-0.5 left-0 h-px bg-slate-600" style={{ width: Math.max(shown - bar, 0) }} />
+    <div className="max-md:hidden relative h-1 flex-none" title={`${label} can't be made narrower than this rule: drag its end`}>
+      <div className="absolute top-0 left-0 h-px bg-slate-700" style={{ width: Math.max(shown - bar, 0) }} />
       <div
         role="slider"
         aria-label={`Narrowest ${label}`}
         aria-valuenow={shown}
-        className="absolute -top-0.5 size-2.5 -ml-1 rounded-full bg-slate-500 hover:bg-slate-200 cursor-ew-resize touch-none"
+        className="absolute -top-[2.5px] size-1.5 -ml-[3px] rounded-full bg-slate-500 hover:bg-slate-200 cursor-ew-resize touch-none"
         style={{ left: Math.max(shown - bar, 0) }}
         onPointerDown={(e) => {
           e.preventDefault();
           e.stopPropagation();
           e.currentTarget.setPointerCapture(e.pointerId);
-          setLive(min);
+          setLive({ min, width: paneRef.current?.getBoundingClientRect().width ?? min });
         }}
         onPointerMove={(e) => {
-          if (live !== null) setLive(at(e));
+          if (!live) return;
+          const next = at(e);
+          setLive({ ...live, min: next });
+          onWiden(Math.max(next - live.width, 0));
         }}
         onPointerUp={(e) => {
           e.currentTarget.releasePointerCapture(e.pointerId);
-          if (live !== null) onMin(at(e));
+          if (live) onMin(at(e));
           setLive(null);
         }}
       />
