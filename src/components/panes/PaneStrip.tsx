@@ -13,6 +13,7 @@ import { remember, subscribeToStorage } from "../storage";
 import { measureRow, Row } from "./measureRow";
 import {
   fitOpening,
+  isShown,
   paneActions,
   PaneDoc,
   paneDocKey,
@@ -32,7 +33,8 @@ import {
  */
 function openWithRoom(doc: PaneDoc, panes: PaneView[], row: Row | undefined, id: string): PaneDoc {
   const pane = panes.find((p) => p.id === id);
-  if (!pane || !row) return paneActions.show(doc, id);
+  // already open: nothing to make room for
+  if (!pane || !row || isShown(pane)) return paneActions.show(doc, id);
   const measured = Object.fromEntries(row.open.map((p) => [p.id, p.width]));
   const opening = panes
     .filter((p) => measured[p.id] !== undefined || p.id === id)
@@ -100,6 +102,13 @@ export function PaneStrip({ children }: { children: ReactNode }) {
   const update = useCallback((change: (doc: PaneDoc) => PaneDoc) => {
     remember(paneDocKey, JSON.stringify(change(parseDoc(localStorage.getItem(paneDocKey)))));
   }, []);
+  // links (showPane) open panes the way the bar does: room made, on the panes as they are now
+  useEffect(() => {
+    opener = (id) => update((d) => openWithRoom(d, panes, narrow ? undefined : measureRow(panes), id));
+    return () => {
+      opener = undefined;
+    };
+  });
   // a mark that the panes have hydrated, for the browser checks
   useEffect(() => {
     document.documentElement.dataset.panesReady = "true";
@@ -123,7 +132,11 @@ export function PaneStrip({ children }: { children: ReactNode }) {
 
 /** Shows a pane (expanded and on the page) from anywhere, a link outside the frame included. */
 export const showPane = (id: string) =>
-  remember(paneDocKey, JSON.stringify(paneActions.show(parseDoc(localStorage.getItem(paneDocKey)), id)));
+  opener ? opener(id) : remember(paneDocKey, JSON.stringify(paneActions.show(parseDoc(localStorage.getItem(paneDocKey)), id)));
+
+// the strip on the page, if any, opens a pane with room made (see
+// openWithRoom); a link outside a course's frame just writes the document
+let opener: ((id: string) => void) | undefined;
 
 /** The panes on the page and what can be done to them; for the panes themselves, the View menu and the phone's row. */
 export function usePanes() {

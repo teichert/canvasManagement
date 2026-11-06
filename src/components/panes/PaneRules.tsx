@@ -10,8 +10,9 @@ import { maxWidthFor, ruleLengthFor } from "./paneStore";
  * The pane's narrowest width, as a rule under its name: the rule runs from
  * the pane's left edge as far as the minimum, and dragging its end sets it.
  * Dragged past the pane's width, the pane widens with it (`onWiden`, the
- * width beyond); dragged back, only the minimum comes back, the pane keeps
- * its width.
+ * width beyond, answers how wide the pane got), and the dot goes no further
+ * than the pane could; dragged back, only the minimum comes back, the pane
+ * keeps its width.
  */
 export function MinRule({
   paneRef,
@@ -25,7 +26,7 @@ export function MinRule({
   min: number;
   floor: number;
   label: string;
-  onWiden: (dx: number) => void;
+  onWiden: (dx: number) => number;
   onMin: (min: number) => void;
 }) {
   // while dragged: the minimum shown, and the pane's width when the drag began
@@ -50,6 +51,14 @@ export function MinRule({
   return (
     <div className="max-md:hidden relative h-1 flex-none" title={`${label} can't be made narrower than this rule: drag its end`}>
       <div className="absolute top-0 left-0 h-px bg-slate-700" style={{ width: Math.max(shown - bar, 0) }} />
+      {live !== null && (
+        <span
+          className="absolute top-1 z-40 whitespace-nowrap rounded bg-gray-950/90 px-1 text-[10px] text-slate-300 pointer-events-none"
+          style={{ left: Math.max(shown - bar, 0) + 6 }}
+        >
+          min width {Math.round(shown)} px
+        </span>
+      )}
       <div
         role="slider"
         aria-label={`Narrowest ${label}`}
@@ -66,8 +75,9 @@ export function MinRule({
         onPointerMove={(e) => {
           if (startWidth.current === null) return;
           const next = at(e);
-          setLive(next);
-          onWiden(Math.max(next - startWidth.current, 0));
+          // no further than the pane got: where the bar after it could go
+          const reached = onWiden(Math.max(next - startWidth.current, 0));
+          setLive(Math.min(next, Math.max(reached, startWidth.current)));
         }}
         onPointerUp={(e) => {
           e.currentTarget.releasePointerCapture(e.pointerId);
@@ -130,7 +140,7 @@ export function MaxRule({ label, maxWidth, onMax }: { label: string; maxWidth: n
         <svg className="absolute top-0 left-full pointer-events-none overflow-visible z-20" width={across} height={Math.max(length, 1)}>
           <line x1={0} y1={length} x2={across} y2={0} className="stroke-slate-400" strokeWidth={1} strokeDasharray="4 3" />
           <text x={across / 2 + 4} y={length / 2 - 4} className="fill-slate-300 text-[10px]">
-            {length >= height - 4 ? "no limit" : `${maxFor(length)} px`}
+            {length >= height - 4 ? "max width: no limit" : `max width ${maxFor(length)} px`}
           </text>
         </svg>
       )}

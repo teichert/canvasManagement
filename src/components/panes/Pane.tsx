@@ -158,7 +158,10 @@ export function Pane({
             floor={minWidth}
             label={label}
             // pushed past the pane's width, the min widens the pane, as if the bar after it were dragged along
-            onWiden={(dx) => dragEdge(place + 1, dx)}
+            onWiden={(dx) => {
+              dragEdge(place + 1, dx);
+              return dragging.current?.now?.[id] ?? width;
+            }}
             onMin={(min) => {
               // no wider than the pane got: the row may not have had the room
               const reached = dragging.current?.now?.[id] ?? paneRef.current?.getBoundingClientRect().width ?? min;
