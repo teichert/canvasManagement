@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fitOpening, maxWidthFor, moveEdge, movePane, paneActions, PaneSpec, parseDoc, ruleLengthFor, shareRow, showingPane, viewPanes, widthRule } from "./paneStore";
+import { fitOpening, leadId, maxWidthFor, moveEdge, withLead, movePane, paneActions, PaneSpec, parseDoc, ruleLengthFor, shareRow, showingPane, viewPanes, widthRule } from "./paneStore";
 
 const spec = (id: string, extra: Partial<PaneSpec> = {}): PaneSpec => ({
   id,
@@ -138,5 +138,18 @@ describe("the max rule", () => {
     expect(ruleLengthFor(320, 320, 20)).toBe(0);
     expect(ruleLengthFor(Infinity, 320, 20)).toBe(Infinity);
     expect(maxWidthFor(898, 320, 20, 900)).toBeUndefined();
+  });
+});
+
+describe("the row's left end", () => {
+  const p = (id: string, width: number, minWidth = 100) => ({ id, width, minWidth, maxWidth: Infinity });
+  it("the first bar dragged right leaves room before it, the empty room at the end going first", () => {
+    expect(moveEdge(withLead([p("a", 300), p("b", 300)], 0), 1, 50, 80)).toEqual({ [leadId]: 50, a: 300, b: 300 });
+  });
+  it("dragged back left, the room before it is taken back", () => {
+    expect(moveEdge(withLead([p("a", 300)], 60), 1, -100, 0)).toEqual({ [leadId]: 0, a: 360 });
+  });
+  it("the lead is remembered apart from the panes", () => {
+    expect(paneActions.setWidths({}, { [leadId]: 40.4, a: 300 })).toEqual({ lead: 40, panes: { a: { width: 300 } } });
   });
 });

@@ -54,6 +54,8 @@ type Strip = {
   narrow: boolean;
   /** The pane showing on a narrow window. */
   showing?: string;
+  /** Empty room before the first pane (see withLead). */
+  lead: number;
   pins: Record<string, boolean>;
   register: (spec: PaneSpec) => () => void;
   updateSpec: (spec: PaneSpec) => void;
@@ -62,6 +64,7 @@ type Strip = {
 
 const StripContext = createContext<Strip>({
   panes: [],
+  lead: 0,
   narrow: false,
   pins: {},
   register: () => () => {},
@@ -119,6 +122,7 @@ export function PaneStrip({ children }: { children: ReactNode }) {
         panes,
         narrow,
         showing: showingPane(panes),
+        lead: parseDoc(json).lead ?? 0,
         pins: parseDoc(json).pins ?? {},
         register,
         updateSpec,
@@ -140,7 +144,7 @@ let opener: ((id: string) => void) | undefined;
 
 /** The panes on the page and what can be done to them; for the panes themselves, the View menu and the phone's row. */
 export function usePanes() {
-  const { panes, narrow, showing, update } = useContext(StripContext);
+  const { panes, narrow, showing, lead, update } = useContext(StripContext);
   const ids = panes.map((p) => p.id);
   // measured when acted on, never while rendering; on a phone the widths
   // are the screen's and aren't kept
@@ -155,6 +159,7 @@ export function usePanes() {
     panes,
     narrow,
     showing,
+    lead,
     setHidden: (id: string, hidden: boolean) => update((d) => paneActions.setHidden(d, id, hidden)),
     /** Opening makes room as a drag would (see openWithRoom); closing only shifts the others. */
     setCollapsed: (id: string, collapsed: boolean) => {

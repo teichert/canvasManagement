@@ -9,6 +9,8 @@ import { ReactNode } from "react";
  */
 export type PaneDoc = {
   order?: string[];
+  /** Empty room before the first pane, dragged in from the row's left end (teichert#81). */
+  lead?: number;
   pins?: Record<string, boolean>;
   /** `min` and `max` are the widths the user set with the pane's rules (#73); without them, the pane's own minimum and no maximum. */
   panes?: Record<string, { hidden?: boolean; collapsed?: boolean; width?: number; min?: number; max?: number }>;
@@ -96,6 +98,18 @@ export const widthRule = (pane: { minWidth: number; width: number }, place: numb
 
 /** An open pane as the sizing rules see it. */
 export type Sized = { id: string; width: number; minWidth: number; maxWidth: number };
+
+/**
+ * The empty room at the row's left end, to the sizing rules a pane before
+ * every other that can be as narrow as nothing, so the left end behaves as
+ * the right end does: the first bar dragged right leaves room behind it,
+ * and a bar dragged left past every minimum takes that room back.
+ */
+export const leadId = "__lead";
+export const withLead = (open: Sized[], lead: number): Sized[] => [
+  { id: leadId, width: lead, minWidth: 0, maxWidth: Infinity },
+  ...open,
+];
 
 const sum = <T,>(list: T[], f: (x: T) => number) => list.reduce((total, x) => total + f(x), 0);
 
@@ -243,8 +257,12 @@ export const paneActions = {
     ids.reduce((d, id) => withPane(d, id, { hidden }), doc),
   /** The narrowest and widest the pane may be made; undefined forgets it. */
   setLimits: (doc: PaneDoc, id: string, limits: { min?: number; max?: number }) => withPane(doc, id, limits),
-  setWidths: (doc: PaneDoc, widths: Record<string, number>) =>
-    Object.entries(widths).reduce((d, [id, width]) => withPane(d, id, { width }), doc),
+  /** Widths from the sizing rules; the lead's, if there, is the room before the first pane. */
+  setWidths: (doc: PaneDoc, { [leadId]: lead, ...widths }: Record<string, number>): PaneDoc =>
+    Object.entries(widths).reduce(
+      (d, [id, width]) => withPane(d, id, { width }),
+      lead === undefined ? doc : { ...doc, lead: Math.max(Math.round(lead), 0) },
+    ),
   move: (doc: PaneDoc, ids: string[], id: string, index: number) => ({ ...doc, order: movePane(ids, id, index) }),
   setPinned: (doc: PaneDoc, key: string, pinned: boolean) => ({ ...doc, pins: { ...doc.pins, [key]: pinned } }),
   /** Back to how the app starts. */

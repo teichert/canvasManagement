@@ -12,7 +12,7 @@ import { maxWidthFor, ruleLengthFor } from "./paneStore";
  * Dragged past the pane's width, the pane widens with it (`onWiden`, the
  * width beyond, answers how wide the pane got), and the dot goes no further
  * than the pane could; dragged back, only the minimum comes back, the pane
- * keeps its width.
+ * keeps its width. Double-clicked, the pane's width now becomes the minimum.
  */
 export function MinRule({
   paneRef,
@@ -65,6 +65,8 @@ export function MinRule({
         aria-valuenow={shown}
         className="absolute z-40 -top-[2.5px] size-1.5 -ml-[3px] rounded-full bg-slate-500 hover:bg-slate-200 cursor-ew-resize touch-none"
         style={{ left: Math.max(shown - bar, 0) }}
+        // double-click: the pane's width now becomes its narrowest
+        onDoubleClick={() => onMin(Math.round(paneRef.current?.getBoundingClientRect().width ?? min))}
         onPointerDown={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -95,7 +97,8 @@ export function MinRule({
  * distance from the rule's end to the open pane's top-right corner is the
  * maximum, so the end moves by itself as the pane is resized, and reaches
  * the top when the pane is as wide as it may be. Dragging the end sets the
- * maximum; dragged to the bottom, there is none.
+ * maximum; dragged to the bottom, there is none. Double-clicked, the
+ * pane's width now becomes the maximum.
  */
 export function MaxRule({ label, maxWidth, onMax }: { label: string; maxWidth: number; onMax: (max: number | undefined) => void }) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -151,6 +154,11 @@ export function MaxRule({ label, maxWidth, onMax }: { label: string; maxWidth: n
         title={`${label} can't be made wider than the distance from here to its top-right corner: drag up or down (to the bottom: no limit)`}
         className="absolute right-0 size-1.5 -mt-[3px] rounded-full bg-slate-500 hover:bg-slate-200 cursor-ns-resize touch-none"
         style={{ top: length }}
+        // double-click: the pane's width now becomes its widest
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          onMax(Math.round(width));
+        }}
         onPointerDown={(e) => {
           e.preventDefault();
           e.stopPropagation();

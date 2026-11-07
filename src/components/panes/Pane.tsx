@@ -5,7 +5,7 @@ import { measureRow, paneElement } from "./measureRow";
 import { MinRule } from "./PaneRules";
 import { HideButton, PaneBar } from "./PaneBar";
 import { useRouterState } from "@tanstack/react-router";
-import { moveEdge, Sized, widthRule } from "./paneStore";
+import { leadId, moveEdge, Sized, widthRule, withLead } from "./paneStore";
 
 const applyWidth = (el: HTMLElement, pane: { minWidth: number; width: number }, place: number) => {
   const rule = widthRule(pane, place);
@@ -59,7 +59,7 @@ export function Pane({
   children: ReactNode;
 }) {
   usePaneRegistration({ id, label, icon, minWidth, defaultWidth, collapsedByDefault, ssr });
-  const { panes, narrow, showing, setCollapsed, setHidden, setWidths, setLimits, jumpTo } = usePanes();
+  const { panes, narrow, showing, lead, setCollapsed, setHidden, setWidths, setLimits, jumpTo } = usePanes();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const popOutHref = { pathname, pane: id };
   const place = panes.findIndex((p) => p.id === id);
@@ -89,10 +89,19 @@ export function Pane({
   /** Moves the edge before the first open pane at or after `from` by `dx` from where it was when this drag began (see moveEdge), live. */
   const dragEdge = (from: number, dx: number) => {
     // every open pane as wide as it is now, and the empty room at the end of the row
-    if (!dragging.current) dragging.current = measureRow(panes);
+    // the room before the first pane is part of the row too (see withLead)
+    if (!dragging.current) {
+      const row = measureRow(panes);
+      dragging.current = { ...row, open: withLead(row.open, lead) };
+    }
     const { open, free } = dragging.current;
-    const k = open.findIndex((p) => panes.findIndex((q) => q.id === p.id) >= from);
+    const k = open.findIndex((p) => p.id !== leadId && panes.findIndex((q) => q.id === p.id) >= from);
     const now = moveEdge(open, k === -1 ? open.length : k, dx, free);
+    const spacer = document.querySelector<HTMLElement>("[data-pane-lead]");
+    if (spacer && now[leadId] !== undefined) {
+      spacer.style.width = `${now[leadId]}px`;
+      spacer.style.marginRight = now[leadId] > 0 ? "0" : "-0.125rem";
+    }
     for (const p of panes) {
       const element = now[p.id] !== undefined && paneElement(p.id);
       if (element) applyWidth(element, { minWidth: p.minWidth, width: now[p.id] }, panes.indexOf(p));

@@ -2,7 +2,7 @@
 import { ReactNode, useMemo } from "react";
 import { useMatches } from "@tanstack/react-router";
 import { Pane } from "@/components/panes/Pane";
-import { PaneStrip, usePinned } from "@/components/panes/PaneStrip";
+import { PaneStrip, usePanes, usePinned } from "@/components/panes/PaneStrip";
 import { PanesMenu } from "@/components/panes/PanesMenu";
 import { PaneSelect } from "@/components/panes/PaneSelect";
 import { FoldedBars, PinButton, topPin } from "@/components/panes/PinnedBars";
@@ -86,6 +86,7 @@ export function CourseFrame({ children }: { children: ReactNode }) {
         <PaneSelect />
         {/* narrow: one grid cell every pane shares, the selected one visible */}
         <div className="min-h-0 flex-1 md:flex md:flex-row md:gap-0.5 max-md:grid">
+          <LeadSpacer />
           {coursePanes.map(({ Content, ...pane }) => (
             // the server renders what the first screen shows: the course page's calendar
             <Pane key={pane.id} {...pane} ssr={pane.id === "calendar" && onCoursePage}>
@@ -98,6 +99,14 @@ export function CourseFrame({ children }: { children: ReactNode }) {
       {children}
     </>
   );
+}
+
+/** The empty room before the first pane, dragged in from the row's left end. */
+function LeadSpacer() {
+  const { lead, narrow } = usePanes();
+  if (narrow) return null;
+  // with no room, it takes back the row's gap after it too, so the panes start where they always did
+  return <div data-pane-lead aria-hidden className="flex-none" style={{ order: -1, width: lead, marginRight: lead > 0 ? 0 : "-0.125rem" }} />;
 }
 
 /** After the crumbs: the course's buttons on the course page, else the item's crumbs and actions. */
