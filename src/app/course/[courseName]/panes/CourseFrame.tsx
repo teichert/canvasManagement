@@ -2,6 +2,7 @@
 import { ReactNode, useMemo } from "react";
 import { useMatches } from "@tanstack/react-router";
 import { Pane } from "@/components/panes/Pane";
+import { EndBar } from "@/components/panes/EndBar";
 import { PaneStrip, usePanes, usePinned } from "@/components/panes/PaneStrip";
 import { PanesMenu } from "@/components/panes/PanesMenu";
 import { PaneSelect } from "@/components/panes/PaneSelect";
@@ -93,6 +94,7 @@ export function CourseFrame({ children }: { children: ReactNode }) {
               <Content {...ctx} />
             </Pane>
           ))}
+          <EndBar />
         </div>
         <BottomBar />
       </div>

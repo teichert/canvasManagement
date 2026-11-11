@@ -12,7 +12,7 @@ export type PaneDoc = {
   /** Empty room before the first pane, dragged in from the row's left end (teichert#81). */
   lead?: number;
   pins?: Record<string, boolean>;
-  /** `min` and `max` are the widths the user set with the pane's rules (#73); without them, the pane's own minimum and no maximum. */
+  /** `min` and `max` are limits a drag from a resize square pushed (see limitsAfter); without them, the pane's own minimum and no maximum. */
   panes?: Record<string, { hidden?: boolean; collapsed?: boolean; width?: number; min?: number; max?: number }>;
 };
 export const paneDocKey = "panes";
@@ -45,9 +45,10 @@ export type PaneSpec = {
  * A pane as the page shows it: its spec with the user's choices applied;
  * `width` is how wide it is (dragged, set by All, or its default),
  * `minWidth` and `maxWidth` the narrowest and widest it may be made
- * (`maxWidth` Infinity when none is set).
+ * (`maxWidth` Infinity when none is set), `floor` the pane's own minimum,
+ * the min until a drag from a resize square pushes it lower.
  */
-export type PaneView = PaneSpec & { hidden: boolean; collapsed: boolean; width: number; maxWidth: number };
+export type PaneView = PaneSpec & { hidden: boolean; collapsed: boolean; width: number; maxWidth: number; floor: number };
 
 /** Panes in the remembered order, then the rest in the order they registered. */
 export function orderPanes<T extends { id: string }>(panes: T[], order: string[] = []): T[] {
@@ -70,8 +71,9 @@ export function viewPanes(specs: PaneSpec[], doc: PaneDoc, hydrated: boolean): P
       hidden: saved.hidden ?? false,
       collapsed: saved.collapsed ?? (hydrated ? spec.collapsedByDefault() : !spec.ssr),
       width: saved.width ?? spec.defaultWidth,
-      minWidth: Math.max(saved.min ?? spec.minWidth, spec.minWidth),
+      minWidth: saved.min ?? spec.minWidth,
       maxWidth: saved.max ?? Infinity,
+      floor: spec.minWidth,
     };
   });
 }
@@ -98,6 +100,23 @@ export const widthRule = (pane: { minWidth: number; width: number }, place: numb
 
 /** An open pane as the sizing rules see it. */
 export type Sized = { id: string; width: number; minWidth: number; maxWidth: number };
+
+/**
+ * `open` with the pane `id` free to be any width, for a drag from a bar's
+ * resize square: the drag gets its way, and a limit it crosses moves with
+ * it (see limitsAfter).
+ */
+export const relax = (open: Sized[], id: string): Sized[] =>
+  open.map((p) => (p.id === id ? { ...p, minWidth: 0, maxWidth: Infinity } : p));
+
+/**
+ * After a drag from a resize square left the pane `width` wide: the limit
+ * it crossed, if any, moved to that width; the other stays as it is.
+ */
+export const limitsAfter = (pane: { minWidth: number; maxWidth: number }, width: number): { min?: number; max?: number } => ({
+  ...(width < pane.minWidth ? { min: Math.round(width) } : {}),
+  ...(width > pane.maxWidth ? { max: Math.round(width) } : {}),
+});
 
 /**
  * The empty room at the row's left end, to the sizing rules a pane before
@@ -211,15 +230,13 @@ export function shareRow(panes: Sized[], room: number, bar: number) {
 }
 
 /**
- * The max rule (see PaneRules): the bound is the bar plus the distance from
- * the rule's end to the pane's top-right corner, across the pane's content
- * and down the rule. So the rule's length for a bound, and the bound for a
- * length; a rule as long as it can be (`room`) means no bound.
+ * The max rule (see PaneRules): how much of the pane's widest width is
+ * still unused, as the share of the rule's length, from the top: nothing
+ * left when the pane is as wide as it may be, the whole rule when it has
+ * no widest width.
  */
-export const ruleLengthFor = (maxWidth: number, width: number, bar: number) =>
-  Number.isFinite(maxWidth) ? Math.sqrt(Math.max((maxWidth - bar) ** 2 - Math.max(width - bar, 0) ** 2, 0)) : Infinity;
-export const maxWidthFor = (length: number, width: number, bar: number, room: number) =>
-  length >= room - 4 ? undefined : Math.round(bar + Math.sqrt(Math.max(width - bar, 0) ** 2 + length ** 2));
+export const maxRuleShare = (maxWidth: number, width: number) =>
+  Number.isFinite(maxWidth) && maxWidth > 0 ? Math.min(Math.max((maxWidth - width) / maxWidth, 0), 1) : 1;
 
 /** `order` with `id` moved to `index`. */
 export function movePane(order: string[], id: string, index: number): string[] {
@@ -255,7 +272,7 @@ export const paneActions = {
     ),
   setAllHidden: (doc: PaneDoc, ids: string[], hidden: boolean) =>
     ids.reduce((d, id) => withPane(d, id, { hidden }), doc),
-  /** The narrowest and widest the pane may be made; undefined forgets it. */
+  /** The narrowest and widest the pane may be made; undefined forgets one. */
   setLimits: (doc: PaneDoc, id: string, limits: { min?: number; max?: number }) => withPane(doc, id, limits),
   /** Widths from the sizing rules; the lead's, if there, is the room before the first pane. */
   setWidths: (doc: PaneDoc, { [leadId]: lead, ...widths }: Record<string, number>): PaneDoc =>

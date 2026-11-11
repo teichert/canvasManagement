@@ -26,14 +26,20 @@ export function measureRow(panes: PaneView[]): Row {
   const row = shown.map((p) => paneElement(p.id)?.parentElement).find(Boolean);
   if (!row) return { open, free: 0, bar: 23, room: 0 };
   const box = row.getBoundingClientRect();
-  const end = Math.max(...[...row.children].map((el) => el.getBoundingClientRect().right));
+  // the end bar sits after the last pane and is part of no pane: the empty
+  // room is what's left before it, and the room the panes share leaves it out
+  const endBar = row.querySelector<HTMLElement>("[data-pane-end]");
+  const end = Math.max(...[...row.children].filter((el) => el !== endBar).map((el) => el.getBoundingClientRect().right));
+  const endBarWidth = endBar ? endBar.getBoundingClientRect().width + gapOf(row) : 0;
   const collapsed = shown.find((p) => p.collapsed);
   const barEl = collapsed ? paneElement(collapsed.id) : paneElement(shown[0].id)?.firstElementChild;
-  const gap = parseFloat(getComputedStyle(row).columnGap) || 0;
+  const gap = gapOf(row);
   return {
     open,
-    free: Math.max(box.right - end, 0),
+    free: Math.max(box.right - endBarWidth - end, 0),
     bar: barEl?.getBoundingClientRect().width ?? 23,
-    room: row.clientWidth - gap * Math.max(shown.length - 1, 0),
+    room: row.clientWidth - endBarWidth - gap * Math.max(shown.length - 1, 0),
   };
 }
+
+const gapOf = (row: Element) => parseFloat(getComputedStyle(row).columnGap) || 0;

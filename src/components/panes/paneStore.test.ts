@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fitOpening, leadId, maxWidthFor, moveEdge, withLead, movePane, paneActions, PaneSpec, parseDoc, ruleLengthFor, shareRow, showingPane, viewPanes, widthRule } from "./paneStore";
+import { fitOpening, leadId, limitsAfter, maxRuleShare, moveEdge, withLead, movePane, paneActions, PaneSpec, parseDoc, relax, shareRow, showingPane, viewPanes, widthRule } from "./paneStore";
 
 const spec = (id: string, extra: Partial<PaneSpec> = {}): PaneSpec => ({
   id,
@@ -130,14 +130,47 @@ describe("shareRow", () => {
 });
 
 describe("the max rule", () => {
-  it("is as long as the drop from the corner that makes the bound, bar included", () => {
-    expect(ruleLengthFor(520, 320, 20)).toBeCloseTo(400);
-    expect(maxWidthFor(400, 320, 20, 900)).toBe(520);
+  it("shows how much of the widest width is left, as a share of its length from the top", () => {
+    expect(maxRuleShare(400, 300)).toBeCloseTo(0.25);
+    expect(maxRuleShare(400, 400)).toBe(0);
+    expect(maxRuleShare(400, 500)).toBe(0);
   });
-  it("is empty when the pane is as wide as it may be, and no bound at its full length", () => {
-    expect(ruleLengthFor(320, 320, 20)).toBe(0);
-    expect(ruleLengthFor(Infinity, 320, 20)).toBe(Infinity);
-    expect(maxWidthFor(898, 320, 20, 900)).toBeUndefined();
+  it("is the whole rule when there is no widest width", () => {
+    expect(maxRuleShare(Infinity, 300)).toBe(1);
+  });
+});
+
+describe("a drag from a resize square", () => {
+  const p = (id: string, width: number, minWidth = 100, maxWidth = Infinity) => ({ id, width, minWidth, maxWidth });
+  it("gets its way: the pane it is for is free of its limits for the drag, the others keep theirs", () => {
+    const b = p("b", 300, 300, 300);
+    expect(moveEdge([p("a", 300), b, p("c", 300)], 2, 50, 0)).toEqual({ a: 350, b: 300, c: 250 });
+    const open = relax([p("a", 300), b, p("c", 300)], "b");
+    expect(moveEdge(open, 2, 50, 0)).toEqual({ a: 300, b: 350, c: 250 });
+    expect(moveEdge(open, 2, -250, 0)).toEqual({ a: 300, b: 50, c: 550 });
+  });
+  it("moves only the limit the drag crossed, to where the pane ended", () => {
+    const b = { minWidth: 200, maxWidth: 400 };
+    expect(limitsAfter(b, 300)).toEqual({});
+    expect(limitsAfter(b, 150.4)).toEqual({ min: 150 });
+    expect(limitsAfter(b, 450)).toEqual({ max: 450 });
+    expect(limitsAfter({ minWidth: 120, maxWidth: Infinity }, 80)).toEqual({ min: 80 });
+  });
+  it("a min pushed under the pane's own minimum holds, and the floor is still known", () => {
+    const view = viewPanes(specs, paneActions.setLimits({}, "editor", { min: 80 }), true).find((v) => v.id === "editor")!;
+    expect([view.minWidth, view.maxWidth, view.floor]).toEqual([80, Infinity, 120]);
+    expect(JSON.parse(JSON.stringify(paneActions.setLimits({ panes: { editor: { min: 80 } } }, "editor", { min: undefined })))).toEqual({ panes: { editor: {} } });
+  });
+});
+
+describe("the row's right end", () => {
+  const p = (id: string, width: number, minWidth = 100) => ({ id, width, minWidth, maxWidth: Infinity });
+  it("the end bar dragged right widens the last pane into the empty room, and no further", () => {
+    expect(moveEdge([p("a", 300), p("b", 300)], 2, 50, 80)).toEqual({ a: 300, b: 350 });
+    expect(moveEdge([p("a", 300), p("b", 300)], 2, 100, 80)).toEqual({ a: 300, b: 380 });
+  });
+  it("dragged left, the last pane narrows to its min, then the one before it, leaving empty room", () => {
+    expect(moveEdge([p("a", 300), p("b", 300)], 2, -250, 0)).toEqual({ a: 250, b: 100 });
   });
 });
 

@@ -167,7 +167,7 @@ export function usePanes() {
       const r = row();
       update((d) => openWithRoom(d, panes, r, id));
     },
-    /** The narrowest and widest the pane may be made. */
+    /** The narrowest and widest the pane may be made; undefined forgets one. */
     setLimits: (id: string, limits: { min?: number; max?: number }) => update((d) => paneActions.setLimits(d, id, limits)),
     /** This pane open, the rest collapsed: on a phone, the one showing. */
     jumpTo: (id: string) => update((d) => paneActions.jumpTo(frozen(d), ids, id)),
@@ -180,7 +180,13 @@ export function usePanes() {
       update((d) => paneActions.openAll(d, widths, collapse));
     },
     setAllHidden: (hidden: boolean) => update((d) => paneActions.setAllHidden(d, ids, hidden)),
-    setWidths: (widths: Record<string, number>) => update((d) => paneActions.setWidths(d, widths)),
+    /** Widths from the sizing rules, and the limits a drag from a resize square moved (see limitsAfter). */
+    setWidths: (widths: Record<string, number>, moved?: { id: string; min?: number; max?: number }) =>
+      update((d) => {
+        const withWidths = paneActions.setWidths(d, widths);
+        const limits = { ...(moved?.min !== undefined && { min: moved.min }), ...(moved?.max !== undefined && { max: moved.max }) };
+        return moved && Object.keys(limits).length ? paneActions.setLimits(withWidths, moved.id, limits) : withWidths;
+      }),
     move: (id: string, index: number) => update((d) => paneActions.move(d, ids, id, index)),
     reset: () => update(paneActions.reset),
   };
