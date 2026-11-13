@@ -47,12 +47,13 @@ export function useDragHandlers(onDrag: (e: React.PointerEvent, startX: number) 
  * The resize square on a bar, below the pop-out icon, in three columns. A
  * drag from either third moves this edge like a drag of the bar, but the
  * pane on that side gives or takes past its limits: from the left third
- * the pane on the bar's left, from the right third the pane on its right.
+ * the nearest open pane on the bar's left, from the right third the nearest
+ * on its right (so a collapsed pane's bar resizes its open neighbours).
  * The drag gets its way, and a limit of that pane it crosses
  * moves with it, that pane's only; double-clicking a third puts that pane's
  * limits back to its own. A drag from the middle third moves the bar's own
  * pane along the row (the cursor says which: resize, move, resize). A third
- * with nothing to do is blank.
+ * with nothing to do is blank, and no part of the square drags the bar.
  */
 export function ResizeSquare({
   sides,
@@ -83,7 +84,8 @@ export function ResizeSquare({
   );
 }
 
-const Blank = () => <div className="h-full bg-slate-800/40" />;
+// the square is the square's, so the bar's edge-drag cursor stops at it
+const Blank = () => <div className="h-full bg-slate-800/40 cursor-default" />;
 
 function Mover({ label, onMove }: { label: string; onMove: (e: React.PointerEvent) => void }) {
   const handlers = useDragHandlers((e) => onMove(e), () => {});
@@ -155,7 +157,7 @@ export function PaneBar({
   onMax: (max: number | undefined) => void;
   /** The pane in its own window: what the page shows, and which pane. */
   popOutHref: { pathname: string; pane: string };
-  /** The open panes on either side of the bar, for the resize square. */
+  /** The nearest open pane on either side of the bar, for the resize square. */
   square: Partial<Record<Side, string>>;
   /** Moves this pane along the row to where the pointer is (the square's middle third). */
   onMove: (e: React.PointerEvent) => void;

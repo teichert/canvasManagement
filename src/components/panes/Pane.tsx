@@ -81,9 +81,10 @@ export function Pane({
   const effectiveMin = view?.minWidth ?? minWidth;
   const maxWidth = view?.maxWidth ?? Infinity;
   // the open panes on either side of this bar, for its resize square: the
-  // nearest open pane before this one, and this one when it is open
+  // nearest open pane before it and the nearest at or after it (this one
+  // when it is open; a collapsed pane's bar still resizes its neighbours)
   const leftPane = panes.slice(0, place).reverse().find(isShown);
-  const rightPane = view && isShown(view) ? view : undefined;
+  const rightPane = panes.slice(place).find(isShown);
   const sidePane = (side?: Side) => (side === "left" ? leftPane : side === "right" ? rightPane : undefined);
   /** This pane moved to where the pointer is along the row: before the first bar whose middle the pointer is left of, else last. */
   const moveTo = (clientX: number) => {
