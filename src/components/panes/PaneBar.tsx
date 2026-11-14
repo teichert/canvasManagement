@@ -7,7 +7,7 @@ import { MaxRule } from "./PaneRules";
 const dragThreshold = 4;
 
 export const barClass =
-  "relative max-md:hidden flex-none select-none w-5 py-2 flex flex-col items-center gap-1 rounded border text-xs font-semibold ";
+  "relative max-md:hidden flex-none select-none w-5 pb-2 flex flex-col items-center gap-1 rounded border text-xs font-semibold ";
 
 export type Side = "left" | "right";
 
@@ -69,8 +69,9 @@ export function ResizeSquare({
   return (
     <div
       data-resize-square
-      // the square is the square's, border included: the bar's edge-drag cursor stops at it
-      className="flex-none grid grid-cols-2 w-full h-6 rounded-sm border border-slate-600 overflow-hidden divide-x divide-slate-600 cursor-default"
+      // flush with the bar's top, its border over the bar's; the square is the square's, border
+      // included: the bar's edge-drag cursor stops at it
+      className="flex-none grid grid-cols-2 w-[calc(100%+2px)] -mx-px -mt-px h-6 rounded border border-slate-600 overflow-hidden divide-x divide-slate-600 cursor-default"
       onPointerDown={(e) => e.stopPropagation()}
     >
       {sides.left === undefined ? <Blank /> : <Half side="left" label={sides.left} onDrag={onDrag} onDragEnd={onDragEnd} onReset={onReset} />}
