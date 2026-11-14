@@ -51,7 +51,8 @@ export function useDragHandlers(onDrag: (e: React.PointerEvent, startX: number) 
  * collapsed pane's bar resizes its open neighbours). The drag gets its way,
  * and a limit of that pane it crosses moves with it, that pane's only;
  * double-clicking a half puts that pane's limits back to its own. A half
- * with nothing to do is blank, and no part of the square drags the bar.
+ * with no open pane on its side moves the edge as a drag of the bar does,
+ * within every pane's limits. No part of the square drags the bar itself.
  */
 export function ResizeSquare({
   sides,
@@ -59,7 +60,7 @@ export function ResizeSquare({
   onDragEnd,
   onReset,
 }: {
-  /** The label of the open pane on each side that has one. */
+  /** The label of the nearest open pane on each side that has one. */
   sides: Partial<Record<Side, string>>;
   onDrag: (e: React.PointerEvent, startX: number, side: Side) => void;
   onDragEnd: () => void;
@@ -74,13 +75,11 @@ export function ResizeSquare({
       className="flex-none grid grid-cols-2 w-[calc(100%+2px)] -mx-px -mt-px h-6 rounded border border-slate-600 overflow-hidden divide-x divide-slate-600 cursor-default"
       onPointerDown={(e) => e.stopPropagation()}
     >
-      {sides.left === undefined ? <Blank /> : <Half side="left" label={sides.left} onDrag={onDrag} onDragEnd={onDragEnd} onReset={onReset} />}
-      {sides.right === undefined ? <Blank /> : <Half side="right" label={sides.right} onDrag={onDrag} onDragEnd={onDragEnd} onReset={onReset} />}
+      <Half side="left" label={sides.left} onDrag={onDrag} onDragEnd={onDragEnd} onReset={onReset} />
+      <Half side="right" label={sides.right} onDrag={onDrag} onDragEnd={onDragEnd} onReset={onReset} />
     </div>
   );
 }
-
-const Blank = () => <div className="h-full bg-slate-800/40" />;
 
 function Half({
   side,
@@ -90,7 +89,8 @@ function Half({
   onReset,
 }: {
   side: Side;
-  label: string;
+  /** The pane that yields; none: a plain drag of the edge. */
+  label?: string;
   onDrag: (e: React.PointerEvent, startX: number, side: Side) => void;
   onDragEnd: () => void;
   onReset: (side: Side) => void;
@@ -99,8 +99,12 @@ function Half({
   return (
     <div
       role="slider"
-      aria-label={`Resize ${label}`}
-      title={`Drag: move this edge, with ${label} giving or taking room past its narrowest or widest width if need be (they follow). Double-click: its limits back to its own`}
+      aria-label={label ? `Resize ${label}` : "Move this edge"}
+      title={
+        label
+          ? `Drag: move this edge, with ${label} giving or taking room past its narrowest or widest width if need be (they follow). Double-click: its limits back to its own`
+          : "Drag: move this edge within the panes' limits"
+      }
       className={"h-full touch-none hover:bg-slate-500 " + (side === "left" ? "cursor-w-resize" : "cursor-e-resize")}
       onDoubleClick={(e) => {
         e.stopPropagation();

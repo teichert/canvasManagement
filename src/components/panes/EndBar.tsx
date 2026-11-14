@@ -7,8 +7,9 @@ import { isShown } from "./paneStore";
 /**
  * The bar after the last pane, with no pane of its own: the row's right
  * edge. Dragged, it widens the last pane into the empty room or narrows it;
- * its resize square (a left half only) resizes the last pane past its
- * limits, as any bar's does for the pane on its left.
+ * its resize square's left half resizes the last pane past its limits, as
+ * any bar's does for the pane on its left; its right half, with no pane
+ * there, moves the edge as the bar does.
  */
 export function EndBar() {
   const { panes, narrow, setLimits } = usePanes();
@@ -30,7 +31,7 @@ export function EndBar() {
       {last && (
         <ResizeSquare
           sides={{ left: last.label }}
-          onDrag={(e, x) => dragEdge(panes.length, e.clientX - x, last.id)}
+          onDrag={(e, x, side) => dragEdge(panes.length, e.clientX - x, side === "left" ? last.id : undefined)}
           onDragEnd={endDrag}
           onReset={() => setLimits(last.id, { min: undefined, max: undefined })}
         />
