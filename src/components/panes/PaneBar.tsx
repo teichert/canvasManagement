@@ -17,7 +17,7 @@ export type Side = "left" | "right";
  * after a drag; `onClick` on release without one. The pointer is captured,
  * so the drag goes on outside the element.
  */
-export function useDragHandlers(onDrag: (e: React.PointerEvent, startX: number) => void, onDragEnd: () => void, onClick?: () => void) {
+export function useDragHandlers(onDrag: (e: React.PointerEvent, startX: number) => void, onDragEnd: (e: React.PointerEvent) => void, onClick?: () => void) {
   const start = useRef<{ x: number; y: number; dragged: boolean } | null>(null);
   return {
     onPointerDown: (e: React.PointerEvent) => {
@@ -36,7 +36,7 @@ export function useDragHandlers(onDrag: (e: React.PointerEvent, startX: number) 
     },
     onPointerUp: (e: React.PointerEvent) => {
       e.currentTarget.releasePointerCapture(e.pointerId);
-      if (start.current?.dragged) onDragEnd();
+      if (start.current?.dragged) onDragEnd(e);
       else if (start.current) onClick?.();
       start.current = null;
     },
@@ -44,15 +44,13 @@ export function useDragHandlers(onDrag: (e: React.PointerEvent, startX: number) 
 }
 
 /**
- * The resize square on a bar, below the pop-out icon, in three columns. A
- * drag from either third moves this edge like a drag of the bar, but the
- * pane on that side gives or takes past its limits: from the left third
- * the nearest open pane on the bar's left, from the right third the nearest
- * on its right (so a collapsed pane's bar resizes its open neighbours).
- * The drag gets its way, and a limit of that pane it crosses
- * moves with it, that pane's only; double-clicking a third puts that pane's
- * limits back to its own. A drag from the middle third moves the bar's own
- * pane along the row (the cursor says which: resize, move, resize). A third
+ * The resize square at the top of a bar, in two halves. A drag from either
+ * half moves this edge like a drag of the bar, but the pane on that side
+ * gives or takes past its limits: from the left half the nearest open pane
+ * on the bar's left, from the right half the nearest on its right (so a
+ * collapsed pane's bar resizes its open neighbours). The drag gets its way,
+ * and a limit of that pane it crosses moves with it, that pane's only;
+ * double-clicking a half puts that pane's limits back to its own. A half
  * with nothing to do is blank, and no part of the square drags the bar.
  */
 export function ResizeSquare({
@@ -60,47 +58,30 @@ export function ResizeSquare({
   onDrag,
   onDragEnd,
   onReset,
-  move,
 }: {
   /** The label of the open pane on each side that has one. */
   sides: Partial<Record<Side, string>>;
   onDrag: (e: React.PointerEvent, startX: number, side: Side) => void;
   onDragEnd: () => void;
-  /** Double-click on a third: that side's pane's limits back to its own. */
+  /** Double-click on a half: that side's pane's limits back to its own. */
   onReset: (side: Side) => void;
-  /** The bar's own pane, moved along the row to where the pointer is as it is dragged. */
-  move?: { label: string; onMove: (e: React.PointerEvent) => void };
 }) {
   return (
     <div
       data-resize-square
-      className="flex-none grid grid-cols-3 w-full h-6 rounded-sm border border-slate-600 overflow-hidden divide-x divide-slate-600"
+      // the square is the square's, border included: the bar's edge-drag cursor stops at it
+      className="flex-none grid grid-cols-2 w-full h-6 rounded-sm border border-slate-600 overflow-hidden divide-x divide-slate-600 cursor-default"
       onPointerDown={(e) => e.stopPropagation()}
     >
-      {sides.left === undefined ? <Blank /> : <Third side="left" label={sides.left} onDrag={onDrag} onDragEnd={onDragEnd} onReset={onReset} />}
-      {move ? <Mover {...move} /> : <Blank />}
-      {sides.right === undefined ? <Blank /> : <Third side="right" label={sides.right} onDrag={onDrag} onDragEnd={onDragEnd} onReset={onReset} />}
+      {sides.left === undefined ? <Blank /> : <Half side="left" label={sides.left} onDrag={onDrag} onDragEnd={onDragEnd} onReset={onReset} />}
+      {sides.right === undefined ? <Blank /> : <Half side="right" label={sides.right} onDrag={onDrag} onDragEnd={onDragEnd} onReset={onReset} />}
     </div>
   );
 }
 
-// the square is the square's, so the bar's edge-drag cursor stops at it
-const Blank = () => <div className="h-full bg-slate-800/40 cursor-default" />;
+const Blank = () => <div className="h-full bg-slate-800/40" />;
 
-function Mover({ label, onMove }: { label: string; onMove: (e: React.PointerEvent) => void }) {
-  const handlers = useDragHandlers((e) => onMove(e), () => {});
-  return (
-    <div
-      role="slider"
-      aria-label={`Move ${label}`}
-      title={`Drag: move ${label} along the row`}
-      className="h-full touch-none cursor-move hover:bg-slate-500"
-      {...handlers}
-    />
-  );
-}
-
-function Third({
+function Half({
   side,
   label,
   onDrag,
@@ -133,8 +114,10 @@ function Third({
  * A pane's bar, on its left edge: its name along it, bottom-up. A click
  * collapses or expands the pane; a drag moves the edge within every pane's
  * limits (the caller says what that resizes; it gets where the drag
- * started); the resize square under the pop-out icon resizes one pane past
- * its limits, which then follow; the × at the bottom hides the pane.
+ * started); the resize square at the top resizes one pane past its limits,
+ * which then follow; under it, the pop-out link; a drag of the name moves
+ * the pane along the row, and dropped outside the window, the pane goes
+ * into a window of its own; the × at the bottom hides the pane.
  */
 export function PaneBar({
   label,
@@ -144,6 +127,7 @@ export function PaneBar({
   popOutHref,
   square,
   onMove,
+  onMoveEnd,
   onToggle,
   onHide,
   onDrag,
@@ -159,8 +143,10 @@ export function PaneBar({
   popOutHref: { pathname: string; pane: string };
   /** The nearest open pane on either side of the bar, for the resize square. */
   square: Partial<Record<Side, string>>;
-  /** Moves this pane along the row to where the pointer is (the square's middle third). */
+  /** Moves this pane along the row to where the pointer is (a drag of its name). */
   onMove: (e: React.PointerEvent) => void;
+  /** Where a drag of the name ended. */
+  onMoveEnd: (e: React.PointerEvent) => void;
   onToggle: () => void;
   onHide: () => void;
   onDrag: (e: React.PointerEvent, startX: number, side?: Side) => void;
@@ -168,6 +154,7 @@ export function PaneBar({
   onReset: (side: Side) => void;
 }) {
   const handlers = useDragHandlers((e, x) => onDrag(e, x), onDragEnd, onToggle);
+  const nameHandlers = useDragHandlers(onMove, onMoveEnd, onToggle);
   return (
     <div
       role="button"
@@ -190,9 +177,15 @@ export function PaneBar({
         }
       }}
     >
+      <ResizeSquare sides={square} onDrag={onDrag} onDragEnd={onDragEnd} onReset={onReset} />
       <PopOutLink label={label} pathname={popOutHref.pathname} pane={popOutHref.pane} />
-      <ResizeSquare sides={square} onDrag={onDrag} onDragEnd={onDragEnd} onReset={onReset} move={{ label, onMove }} />
-      <span className="[writing-mode:vertical-rl] rotate-180 whitespace-nowrap">{label}</span>
+      <span
+        className="[writing-mode:vertical-rl] rotate-180 whitespace-nowrap touch-none cursor-move hover:text-white"
+        title={`Drag: move ${label} along the row, or out of the window into one of its own`}
+        {...nameHandlers}
+      >
+        {label}
+      </span>
       {collapsed && (
         <span className="mt-auto">
           <HideButton label={label} onHide={onHide} />

@@ -7,7 +7,7 @@ import { isShown } from "./paneStore";
 /**
  * The bar after the last pane, with no pane of its own: the row's right
  * edge. Dragged, it widens the last pane into the empty room or narrows it;
- * its resize square (a left third only) resizes the last pane past its
+ * its resize square (a left half only) resizes the last pane past its
  * limits, as any bar's does for the pane on its left.
  */
 export function EndBar() {

@@ -7,6 +7,7 @@ import { useRouterState } from "@tanstack/react-router";
 import { isShown } from "./paneStore";
 import { applyWidth, useEdgeDrag } from "./useEdgeDrag";
 import { paneElement } from "./measureRow";
+import { openPopOut } from "@/app/course/[courseName]/panes/popOut";
 
 /**
  * A pane in the strip: a bar on its left edge, then its content with its
@@ -20,7 +21,8 @@ import { paneElement } from "./measureRow";
  * left, the pane to its left shrinks, down to its minimum, and the open
  * pane to its right grows. The other open panes keep their widths (see
  * widthRule); a drag from the bar's resize square is what takes a pane
- * past its limits, which then follow it (see PaneBar). On a narrow window there are
+ * past its limits, which then follow it, and a drag of the name on the bar
+ * moves the pane along the row (see PaneBar). On a narrow window there are
  * no bars: the panes share one spot, the first open one visible and the
  * others kept as they are, scroll included.
  */
@@ -65,6 +67,13 @@ export function Pane({
   const collapsed = narrow ? !selected : remembered;
   const toggle = () => setCollapsed(id, !remembered);
   const hide = () => setHidden(id, true);
+  /** The pane dropped outside the window: off the page and into a window of its own. */
+  const dropped = (e: React.PointerEvent) => {
+    if (e.clientX < 0 || e.clientY < 0 || e.clientX > window.innerWidth || e.clientY > window.innerHeight) {
+      hide();
+      openPopOut(pathname, id);
+    }
+  };
   // the content is built the first time the pane is shown, then kept (scroll, state)
   const [built, setBuilt] = useState(!collapsed);
   if (!collapsed && !built) setBuilt(true);
@@ -125,6 +134,7 @@ export function Pane({
         popOutHref={popOutHref}
         square={{ left: leftPane?.label, right: rightPane?.label }}
         onMove={(e) => moveTo(e.clientX)}
+        onMoveEnd={dropped}
         onToggle={toggle}
         onHide={hide}
         // the bar is the edge before this pane, and follows the pointer; from the square, the pane on
