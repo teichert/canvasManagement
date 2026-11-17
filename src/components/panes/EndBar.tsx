@@ -16,7 +16,7 @@ import { openPopOut, popOutUrl } from "@/app/course/[courseName]/panes/popOut";
  * Shift-click opens the view in a new window following this one.
  */
 export function EndBar({ views = [] }: { views?: ViewChoice[] }) {
-  const { panes, narrow, setLimits, addPane } = usePanes();
+  const { panes, narrow, setLimits, setWidths, addPane } = usePanes();
   const { dragEdge, endDrag } = useEdgeDrag();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const handlers = useDragHandlers((e, x) => dragEdge(panes.length, e.clientX - x), endDrag);
@@ -38,7 +38,10 @@ export function EndBar({ views = [] }: { views?: ViewChoice[] }) {
           sides={{ left: last.label }}
           onDrag={(e, x, side) => dragEdge(panes.length, e.clientX - x, side === "left" ? last.id : undefined)}
           onDragEnd={endDrag}
-          onReset={() => setLimits(last.id, { min: undefined, max: undefined })}
+          onReset={() => {
+            setLimits(last.id, { min: undefined, max: undefined });
+            setWidths({ [last.id]: last.defaultWidth });
+          }}
         />
       )}
       {views.length > 0 && (

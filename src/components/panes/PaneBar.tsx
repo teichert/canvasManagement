@@ -64,7 +64,7 @@ export function ResizeSquare({
   sides: Partial<Record<Side, string>>;
   onDrag: (e: React.PointerEvent, startX: number, side: Side) => void;
   onDragEnd: () => void;
-  /** Double-click on a half: that side's pane's limits back to its own. */
+  /** Double-click on a half: that side's pane back to its own width and limits. */
   onReset: (side: Side) => void;
 }) {
   return (
@@ -102,7 +102,7 @@ function Half({
       aria-label={label ? `Resize ${label}` : "Move this edge"}
       title={
         label
-          ? `Drag: move this edge, with ${label} giving or taking room past its narrowest or widest width if need be (they follow). Double-click: its limits back to its own`
+          ? `Drag: move this edge, with ${label} giving or taking room past its narrowest or widest width if need be (they follow). Double-click: ${label} back to its own width and limits`
           : "Drag: move this edge within the panes' limits"
       }
       className={"h-full touch-none hover:bg-slate-500 " + (side === "left" ? "cursor-w-resize" : "cursor-e-resize")}
@@ -125,7 +125,8 @@ export type OnView = (view: string, e: React.MouseEvent) => void;
  * (and icons, so the icons are explained), then one icon each. Each is a
  * link to the view's pop-out url (the middle button opens it in a tab,
  * tied to nothing); any other click goes to `onView`. The view this bar's
- * pane shows, if any, is marked and is the handle to drag the pane by.
+ * pane shows, if any, is marked; it and the menu icon are the handles to
+ * drag the pane by (`move`).
  */
 export function ViewIcons({
   views,
@@ -144,10 +145,19 @@ export function ViewIcons({
   onView: OnView;
   /** Which side of the bar the menu opens on. */
   menuSide: "left" | "right";
-  /** On the marked icon: the drag that moves the pane (see PaneBar). */
-  moveHandlers?: ReturnType<typeof useDragHandlers>;
+  /** The drag that moves the pane along the row, from the marked icon or the menu icon (see PaneBar). */
+  move?: { onMove: (e: React.PointerEvent) => void; onMoveEnd: (e: React.PointerEvent) => void };
 }) {
   const [menuAt, setMenuAt] = useState<{ top: number; left?: number; right?: number } | null>(null);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const toggleMenu = () => {
+    const r = menuButton.current?.getBoundingClientRect();
+    if (!r) return;
+    setMenuAt(menuAt ? null : menuSide === "right" ? { top: r.top, left: r.right + 2 } : { top: r.top, right: window.innerWidth - r.left + 2 });
+  };
+  const noMove = () => {};
+  const moveHandlers = useDragHandlers(move?.onMove ?? noMove, move?.onMoveEnd ?? noMove);
+  const menuHandlers = useDragHandlers(move?.onMove ?? noMove, move?.onMoveEnd ?? noMove, toggleMenu);
   const click = (view: string) => (e: React.MouseEvent) => {
     // a middle click is no click; the rest are ours
     e.preventDefault();
@@ -160,16 +170,12 @@ export function ViewIcons({
   return (
     <>
       <button
-        className={icon + "text-slate-500 hover:text-slate-200"}
+        ref={menuButton}
+        className={icon + "text-slate-500 hover:text-slate-200 touch-none"}
         aria-label="Views by name"
         aria-expanded={menuAt !== null}
-        title={`The views by name. Each: ${hint}`}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation();
-          const r = e.currentTarget.getBoundingClientRect();
-          setMenuAt(menuAt ? null : menuSide === "right" ? { top: r.top, left: r.right + 2 } : { top: r.top, right: window.innerWidth - r.left + 2 });
-        }}
+        title={`The views by name. Each: ${hint}${move ? ". Drag: move the pane along the row" : ""}`}
+        {...menuHandlers}
       >
         <PanesIcon />
       </button>
@@ -309,7 +315,7 @@ export function PaneBar({
           hrefOf={(view) => `${popOutHref.pathname}?pane=${view}`}
           onView={onView}
           menuSide="right"
-          moveHandlers={nameHandlers}
+          move={{ onMove, onMoveEnd }}
         />
       ) : (
         <span

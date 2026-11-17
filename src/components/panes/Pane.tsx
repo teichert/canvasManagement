@@ -156,9 +156,12 @@ export function Pane({
         // that side is the one whose limits yield
         onDrag={(e, startX, side) => dragEdge(place, e.clientX - startX, sidePane(side)?.id)}
         onDragEnd={endDrag}
+        // double-click on a half: that side's pane as it started, its own width and limits
         onReset={(side) => {
           const pane = sidePane(side);
-          if (pane) setLimits(pane.id, { min: undefined, max: undefined });
+          if (!pane) return;
+          setLimits(pane.id, { min: undefined, max: undefined });
+          setWidths({ [pane.id]: pane.defaultWidth });
         }}
       />
       <div
