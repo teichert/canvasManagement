@@ -151,10 +151,14 @@ function BottomBar() {
   return parts?.bottomBar;
 }
 
-/** The frame with the pane strip around it, for the course route. */
+/** The frame with the pane strip around it, for the course route; a pop-out's links to a view switch the pop-out's view, and it never writes the layout. */
 export function CourseFrameWithPanes({ children }: { children: ReactNode }) {
+  const popOut = usePopOutPane();
+  const router = useRouter();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
-    <PaneStrip>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    <PaneStrip onShowPane={popOut ? (view) => router.navigate({ to: pathname as any, search: { pane: view } as any }) : undefined}>
       <CourseFrame>{children}</CourseFrame>
     </PaneStrip>
   );

@@ -10,6 +10,16 @@ import {
   useSyncExternalStore,
 } from "react";
 import { remember, subscribeToStorage } from "../storage";
+
+// Each window keeps its own layout (sessionStorage: it survives that
+// window's reloads), seeded from the last layout saved by any window
+// (localStorage): new windows start where you left off, then go their own
+// way, so two full windows needn't agree on what is open.
+const readPaneDoc = () => sessionStorage.getItem(paneDocKey) ?? localStorage.getItem(paneDocKey);
+const writePaneDoc = (json: string) => {
+  sessionStorage.setItem(paneDocKey, json);
+  remember(paneDocKey, json);
+};
 import { measureRow, Row } from "./measureRow";
 import {
   fitOpening,
@@ -95,7 +105,14 @@ const subscribeToNothing = () => () => {};
  * every pane's view from it (see paneStore), and hands the views and the
  * actions on the document to the panes and the phone's row.
  */
-export function PaneStrip({ children }: { children: ReactNode }) {
+export function PaneStrip({
+  children,
+  onShowPane,
+}: {
+  children: ReactNode;
+  /** A window that shows one view (a pop-out): what a link to a view does instead, and the layout is never written. */
+  onShowPane?: (view: string) => void;
+}) {
   const [specs, setSpecs] = useState<PaneSpec[]>([]);
   const register = useCallback((spec: PaneSpec) => {
     setSpecs((current) => (current.some((s) => s.id === spec.id) ? current : [...current, spec]));
@@ -105,7 +122,7 @@ export function PaneStrip({ children }: { children: ReactNode }) {
   const updateSpec = useCallback((spec: PaneSpec) => {
     setSpecs((current) => current.map((s) => (s.id === spec.id ? spec : s)));
   }, []);
-  const json = useSyncExternalStore(subscribeToStorage, () => localStorage.getItem(paneDocKey), () => null);
+  const json = useSyncExternalStore(subscribeToStorage, readPaneDoc, () => null);
   // false on the server and while hydrating: the views then use what the server renders
   const hydrated = useSyncExternalStore(subscribeToNothing, () => true, () => false);
   const narrow = useSyncExternalStore(subscribeToWidth, () => window.matchMedia(narrowQuery).matches, () => false);
@@ -118,18 +135,22 @@ export function PaneStrip({ children }: { children: ReactNode }) {
     const timer = setTimeout(() => setFlashing(undefined), 3000);
     return () => clearTimeout(timer);
   }, [flashing]);
-  const update = useCallback((change: (doc: PaneDoc) => PaneDoc) => {
-    remember(paneDocKey, JSON.stringify(change(parseDoc(localStorage.getItem(paneDocKey)))));
-  }, []);
+  const update = useCallback(
+    (change: (doc: PaneDoc) => PaneDoc) => {
+      if (onShowPane) return;
+      writePaneDoc(JSON.stringify(change(parseDoc(readPaneDoc()))));
+    },
+    [onShowPane],
+  );
   // links (showPane) open the first pane of the view on the page the way the bar
   // does, room made, on the panes as they are now; with none on the page, a new
   // pane of the view at the end of the row
   useEffect(() => {
-    opener = (view) => {
+    opener = onShowPane ?? ((view) => {
       const pane = panes.find((p) => viewOf(p.id) === view && !p.hidden);
       if (!pane) return update((d) => paneActions.add(d, panes.map((p) => p.id), view));
       update((d) => openWithRoom(d, panes, narrow ? undefined : measureRow(panes), pane.id));
-    };
+    });
     return () => {
       opener = undefined;
     };
@@ -163,9 +184,9 @@ export function PaneStrip({ children }: { children: ReactNode }) {
 export const showPane = (id: string) => {
   if (opener) return opener(id);
   // no strip yet (the page is loading): the document alone says whether the view's pane is on the page
-  const doc = parseDoc(localStorage.getItem(paneDocKey));
+  const doc = parseDoc(readPaneDoc());
   const ids = [...new Set([...Object.keys(doc.panes ?? {}), ...(doc.added ?? []), id])];
-  remember(paneDocKey, JSON.stringify(doc.panes?.[id]?.hidden ? paneActions.add(doc, ids, id) : paneActions.show(doc, id)));
+  writePaneDoc(JSON.stringify(doc.panes?.[id]?.hidden ? paneActions.add(doc, ids, id) : paneActions.show(doc, id)));
 };
 
 // the strip on the page, if any, opens a pane with room made (see

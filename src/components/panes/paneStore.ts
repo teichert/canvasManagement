@@ -2,7 +2,8 @@ import { ReactNode } from "react";
 
 /**
  * Everything a user has chosen about the panes, remembered as one document
- * in localStorage under `panes`: the order they dragged them into, which
+ * under `panes` (the window's own in sessionStorage, the last saved in
+ * localStorage, see PaneStrip): the order they dragged them into, which
  * bars are off the page, which panes are collapsed, their widths, and which
  * bars are pinned. Nothing here reads the document; PaneStrip does that
  * once and hands the derived views around.
