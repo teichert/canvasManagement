@@ -42,14 +42,15 @@ export function CourseFrame({ children }: { children: ReactNode }) {
   }, [urlItem, onCoursePage, settings]);
   const [topPinned] = usePinned(topPin);
   const { added } = usePanes();
-  // the catalogue's pane of each view, then the copies added (see paneActions.add), each with its view's spec and a numbered label
+  // the catalogue's pane of each view, then the copies added (see paneActions.add), each with its view's spec
   const panes = [
     ...coursePanes,
     ...added.flatMap((id) => {
       const view = coursePanes.find((p) => p.id === viewOf(id));
-      return view ? [{ ...view, id, label: `${view.label} ${id.split("#")[1]}` }] : [];
+      return view ? [{ ...view, id }] : [];
     }),
   ];
+  const views = coursePanes.map(({ id, label, icon }) => ({ id, label, icon }));
   const popOut = usePopOutPane();
   // the same object while nothing changed, so memoized pane contents are skipped
   const ctx: PaneContext = useMemo(() => ({ courseName, item, onCoursePage }), [courseName, item, onCoursePage]);
@@ -96,11 +97,11 @@ export function CourseFrame({ children }: { children: ReactNode }) {
           <LeadSpacer />
           {panes.map(({ Content, ...pane }) => (
             // the server renders what the first screen shows: the course page's calendar
-            <Pane key={pane.id} {...pane} ssr={pane.id === "calendar" && onCoursePage}>
+            <Pane key={pane.id} {...pane} views={views} ssr={pane.id === "calendar" && onCoursePage}>
               <Content {...ctx} />
             </Pane>
           ))}
-          <EndBar views={coursePanes.map(({ id, label, icon }) => ({ id, label, icon }))} />
+          <EndBar views={views} />
         </div>
         <BottomBar />
       </div>

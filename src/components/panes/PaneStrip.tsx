@@ -20,7 +20,6 @@ import {
   PaneSpec,
   PaneView,
   parseDoc,
-  shareRow,
   showingPane,
   viewOf,
   viewPanes,
@@ -59,8 +58,6 @@ type Strip = {
   lead: number;
   /** Panes beyond the catalogue's: a view's second and later copies (see paneActions.add). */
   added: string[];
-  /** The pane the view row marks on a wide window. */
-  current?: string;
   pins: Record<string, boolean>;
   register: (spec: PaneSpec) => () => void;
   updateSpec: (spec: PaneSpec) => void;
@@ -91,7 +88,7 @@ const subscribeToNothing = () => () => {};
  * The row of panes on a course page. Panes register themselves as they
  * mount; the strip reads the remembered document once per change, derives
  * every pane's view from it (see paneStore), and hands the views and the
- * actions on the document to the panes, the View menu and the phone's row.
+ * actions on the document to the panes and the phone's row.
  */
 export function PaneStrip({ children }: { children: ReactNode }) {
   const [specs, setSpecs] = useState<PaneSpec[]>([]);
@@ -116,7 +113,7 @@ export function PaneStrip({ children }: { children: ReactNode }) {
   useEffect(() => {
     opener = (view) => {
       const id = [...panes].reverse().find((p) => viewOf(p.id) === view)?.id ?? view;
-      update((d) => paneActions.setCurrent(openWithRoom(d, panes, narrow ? undefined : measureRow(panes), id), id));
+      update((d) => openWithRoom(d, panes, narrow ? undefined : measureRow(panes), id));
     };
     return () => {
       opener = undefined;
@@ -134,7 +131,6 @@ export function PaneStrip({ children }: { children: ReactNode }) {
         showing: showingPane(panes),
         lead: parseDoc(json).lead ?? 0,
         added: parseDoc(json).added ?? [],
-        current: parseDoc(json).current,
         pins: parseDoc(json).pins ?? {},
         register,
         updateSpec,
@@ -154,9 +150,9 @@ export const showPane = (id: string) =>
 // openWithRoom); a link outside a course's frame just writes the document
 let opener: ((id: string) => void) | undefined;
 
-/** The panes on the page and what can be done to them; for the panes themselves, the View menu and the phone's row. */
+/** The panes on the page and what can be done to them; for the panes themselves and the phone's row. */
 export function usePanes() {
-  const { panes, narrow, showing, lead, added, current, update } = useContext(StripContext);
+  const { panes, narrow, showing, lead, added, update } = useContext(StripContext);
   const ids = panes.map((p) => p.id);
   // measured when acted on, never while rendering; on a phone the widths
   // are the screen's and aren't kept
@@ -173,14 +169,12 @@ export function usePanes() {
     showing,
     lead,
     added,
-    current,
     setHidden: (id: string, hidden: boolean) => update((d) => paneActions.setHidden(d, id, hidden)),
     /** Another pane of a view, open, after the pane given or at the end of the row. */
     addPane: (view: string, after?: string) => update((d) => paneActions.add(d, ids, view, after)),
     /** The pane showing another view instead, in its place (see paneActions.switchView). */
     switchView: (id: string, view: string) => update((d) => paneActions.switchView(d, ids, id, view)),
     removePane: (id: string) => update((d) => paneActions.remove(d, id)),
-    setCurrent: (id: string) => update((d) => paneActions.setCurrent(d, id)),
     /** Opening makes room as a drag would (see openWithRoom); closing only shifts the others. */
     setCollapsed: (id: string, collapsed: boolean) => {
       if (collapsed || narrow) return update((d) => paneActions.setCollapsed(frozen(d), id, collapsed));
@@ -191,15 +185,6 @@ export function usePanes() {
     setLimits: (id: string, limits: { min?: number; max?: number }) => update((d) => paneActions.setLimits(d, id, limits)),
     /** This pane open, the rest collapsed: on a phone, the one showing. */
     jumpTo: (id: string) => update((d) => paneActions.jumpTo(frozen(d), ids, id)),
-    setAllCollapsed: (collapsed: boolean) => update((d) => paneActions.setAllCollapsed(frozen(d), ids, collapsed)),
-    /** Every pane on the page open, the room shared out among them. */
-    openAll: () => {
-      const r = row();
-      if (!r) return update((d) => paneActions.setAllCollapsed(d, ids, false));
-      const { widths, collapse } = shareRow(panes.filter((p) => !p.hidden), r.room, r.bar);
-      update((d) => paneActions.openAll(d, widths, collapse));
-    },
-    setAllHidden: (hidden: boolean) => update((d) => paneActions.setAllHidden(d, ids, hidden)),
     /** Widths from the sizing rules, and the limits a drag from a resize square moved (see limitsAfter). */
     setWidths: (widths: Record<string, number>, moved?: { id: string; min?: number; max?: number }) =>
       update((d) => {
@@ -208,7 +193,6 @@ export function usePanes() {
         return moved && Object.keys(limits).length ? paneActions.setLimits(withWidths, moved.id, limits) : withWidths;
       }),
     move: (id: string, index: number) => update((d) => paneActions.move(d, ids, id, index)),
-    reset: () => update(paneActions.reset),
   };
 }
 

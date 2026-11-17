@@ -16,8 +16,6 @@ export type PaneDoc = {
   panes?: Record<string, { hidden?: boolean; collapsed?: boolean; width?: number; min?: number; max?: number }>;
   /** Panes added beyond the catalogue's one per view: a view's second and later copies, ids like `editor#2` (see viewOf). */
   added?: string[];
-  /** The pane the view row marks on a wide window: the last one switched to, added or shown by a link. */
-  current?: string;
 };
 export const paneDocKey = "panes";
 
@@ -100,7 +98,7 @@ export const showingPane = (panes: PaneView[]) => (panes.find(isShown) ?? panes.
 /**
  * An open pane in the row, as flexbox terms: exactly its width, so opening
  * or closing a pane only shifts the others and room nobody takes stays
- * empty. The rules below (moveEdge, fitOpening, shareRow) decide the widths
+ * empty. The rules below (moveEdge, fitOpening) decide the widths
  * whenever the user acts; this only matters when the row itself changes
  * under them (the window is resized): too narrow for every width, the panes
  * give way from the right (a shrink weight that climbs steeply with the
@@ -208,42 +206,6 @@ export function fitOpening(open: Sized[], id: string, need: number, free: number
 }
 
 /**
- * All: every pane on the page open in a row `room` px wide. Each gets its
- * min, handed out from the left while they fit (a pane that doesn't is
- * collapsed to its bar); what's left is shared in proportion to how much
- * more each could take (max − min; no max counts as the whole row), nobody
- * passing its max.
- */
-export function shareRow(panes: Sized[], room: number, bar: number) {
-  const widths: Record<string, number> = {};
-  const collapse: string[] = [];
-  let left = room - panes.length * bar;
-  for (const p of panes) {
-    if (p.minWidth - bar <= left) {
-      widths[p.id] = p.minWidth;
-      left -= p.minWidth - bar;
-    } else collapse.push(p.id);
-  }
-  // water-fill: share in proportion to headroom, cap at max, share again what the capped couldn't take
-  let open = panes.filter((p) => !collapse.includes(p.id));
-  while (left > 0.5 && open.length) {
-    const headroom = (p: Sized) => Math.min(p.maxWidth, room) - p.minWidth;
-    const total = sum(open, headroom);
-    if (total <= 0) break;
-    let handed = 0;
-    for (const p of open) {
-      const share = Math.min((left * headroom(p)) / total, p.maxWidth - widths[p.id]);
-      widths[p.id] += share;
-      handed += share;
-    }
-    left -= handed;
-    open = open.filter((p) => p.maxWidth - widths[p.id] > 0.5);
-    if (handed < 0.5) break;
-  }
-  return { widths, collapse };
-}
-
-/**
  * The max rule (see PaneRules): how much of the pane's widest width is
  * still unused, as the share of the rule's length, from the top: nothing
  * left when the pane is as wide as it may be, the whole rule when it has
@@ -263,7 +225,7 @@ const withPane = (doc: PaneDoc, id: string, change: NonNullable<PaneDoc["panes"]
   panes: { ...doc.panes, [id]: { ...doc.panes?.[id], ...change } },
 });
 
-/** What the menu, the bars and the phone's row do to the document. */
+/** What the bars, the links and the phone's row do to the document. */
 export const paneActions = {
   setHidden: (doc: PaneDoc, id: string, hidden: boolean) => withPane(doc, id, { hidden }),
   setCollapsed: (doc: PaneDoc, id: string, collapsed: boolean) => withPane(doc, id, { collapsed }),
@@ -276,16 +238,6 @@ export const paneActions = {
       id,
       { hidden: false },
     ),
-  setAllCollapsed: (doc: PaneDoc, ids: string[], collapsed: boolean) =>
-    ids.reduce((d, id) => withPane(d, id, { collapsed }), doc),
-  /** Every pane whose bar is on the page open at the widths given, those in `collapse` collapsed (see shareRow). */
-  openAll: (doc: PaneDoc, widths: Record<string, number>, collapse: string[] = []) =>
-    collapse.reduce(
-      (d, id) => withPane(d, id, { collapsed: true }),
-      Object.entries(widths).reduce((d, [id, width]) => withPane(d, id, { collapsed: false, width }), doc),
-    ),
-  setAllHidden: (doc: PaneDoc, ids: string[], hidden: boolean) =>
-    ids.reduce((d, id) => withPane(d, id, { hidden }), doc),
   /** The narrowest and widest the pane may be made; undefined forgets one. */
   setLimits: (doc: PaneDoc, id: string, limits: { min?: number; max?: number }) => withPane(doc, id, limits),
   /** Widths from the sizing rules; the lead's, if there, is the room before the first pane. */
@@ -296,31 +248,29 @@ export const paneActions = {
     ),
   move: (doc: PaneDoc, ids: string[], id: string, index: number) => ({ ...doc, order: movePane(ids, id, index) }),
   setPinned: (doc: PaneDoc, key: string, pinned: boolean) => ({ ...doc, pins: { ...doc.pins, [key]: pinned } }),
-  /** Another pane of `view` (its lowest free number), open and current, after the pane `after` or at the end of the row. */
+  /** Another pane of `view` (its lowest free number), open, after the pane `after` or at the end of the row. */
   add: (doc: PaneDoc, ids: string[], view: string, after?: string): PaneDoc => {
     const id = freeId(ids, view);
     const at = after === undefined ? -1 : ids.indexOf(after);
     const order = at === -1 ? undefined : [...ids.slice(0, at + 1), id, ...ids.slice(at + 1)];
-    return { ...withPane(doc, id, { collapsed: false }), ...(order && { order }), added: [...(doc.added ?? []), id], current: id };
+    return { ...withPane(doc, id, { collapsed: false }), ...(order && { order }), added: [...(doc.added ?? []), id] };
   },
   /**
    * The pane `id` showing `view` instead: a new pane of that view takes its
    * place, width, limits and state; the old one goes (a catalogue pane is
-   * hidden, since the View menu lists it; a copy is removed).
+   * hidden, since the frame always renders it; a copy is removed).
    */
   switchView: (doc: PaneDoc, ids: string[], id: string, view: string): PaneDoc => {
     if (viewOf(id) === view) return doc;
     const next = freeId(ids, view);
+    // open: the icons are on an expanded pane's bar, and the new pane's own default could be collapsed
     const { hidden: _hidden, ...state } = doc.panes?.[id] ?? {};
-    const moved = withPane({ ...doc, order: ids.map((x) => (x === id ? next : x)), added: [...(doc.added ?? []), next], current: next }, next, state);
+    const moved = withPane({ ...doc, order: ids.map((x) => (x === id ? next : x)), added: [...(doc.added ?? []), next] }, next, { ...state, collapsed: false });
     return id.includes("#") ? paneActions.remove({ ...moved, order: moved.order }, id) : withPane(moved, id, { hidden: true });
   },
   /** An added pane taken away for good (a catalogue pane is only hidden). */
   remove: (doc: PaneDoc, id: string): PaneDoc => {
     const { [id]: _gone, ...panes } = doc.panes ?? {};
-    return { ...doc, panes, added: (doc.added ?? []).filter((x) => x !== id), order: doc.order?.filter((x) => x !== id), current: doc.current === id ? undefined : doc.current };
+    return { ...doc, panes, added: (doc.added ?? []).filter((x) => x !== id), order: doc.order?.filter((x) => x !== id) };
   },
-  setCurrent: (doc: PaneDoc, id: string): PaneDoc => ({ ...doc, current: id }),
-  /** Back to how the app starts. */
-  reset: (): PaneDoc => ({}),
 };

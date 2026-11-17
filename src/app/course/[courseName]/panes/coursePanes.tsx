@@ -43,7 +43,7 @@ export type PaneContext = {
 
 /**
  * One entry per pane of a course, in their default order. The frame
- * renders them; the View menu and the phone's row list them; the pane
+ * renders them; the bars and the phone's row list them; the pane
  * store remembers what the user does with them. To add a pane, add an entry.
  */
 export type CoursePane = {
