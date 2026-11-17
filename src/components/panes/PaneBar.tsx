@@ -1,6 +1,5 @@
 "use client";
 import { ReactNode, useRef, useState } from "react";
-import { PopOutLink } from "./PopOutLink";
 import { MaxRule } from "./PaneRules";
 import { PanesIcon } from "../icons/ActionIcons";
 
@@ -156,7 +155,8 @@ export function ViewIcons({
     setMenuAt(null);
     onView(view, e);
   };
-  const icon = "unstyled !p-0 flex-none flex items-center justify-center size-5 rounded ";
+  // a touch smaller than the bar's text, so the stack sits well inside the bar
+  const icon = "unstyled !p-0 flex-none flex items-center justify-center size-5 text-[0.85em] rounded ";
   return (
     <>
       <button
@@ -233,7 +233,7 @@ export function ViewIcons({
  * collapses or expands the pane; a drag moves the edge within every pane's
  * limits (the caller says what that resizes; it gets where the drag
  * started); the resize square at the top resizes one pane past its limits,
- * which then follow; under it, the pop-out link; a drag of the name moves
+ * which then follow; a drag of the name moves
  * the pane along the row, and dropped outside the window, the pane goes
  * into a window of its own; the × at the bottom hides the pane.
  */
@@ -259,7 +259,7 @@ export function PaneBar({
   /** The widest the pane may be made (Infinity: no limit), for the max rule, and setting it from the rule. */
   maxWidth: number;
   onMax: (max: number | undefined) => void;
-  /** The pane in its own window: what the page shows, and which view. */
+  /** What the page shows and which view this pane shows: the view icons' pop-out urls, and the marked one. */
   popOutHref: { pathname: string; pane: string };
   /** The views the pane can show, offered on the bar while it is expanded. */
   views?: ViewChoice[];
@@ -301,7 +301,6 @@ export function PaneBar({
       }}
     >
       <ResizeSquare sides={square} onDrag={onDrag} onDragEnd={onDragEnd} onReset={onReset} />
-      <PopOutLink label={label} pathname={popOutHref.pathname} pane={popOutHref.pane} />
       {!collapsed && views && onView ? (
         <ViewIcons
           views={views}

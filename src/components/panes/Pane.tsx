@@ -2,7 +2,8 @@
 import { CSSProperties, ReactNode, RefObject, useLayoutEffect, useRef, useState } from "react";
 import { usePaneRegistration, usePanes } from "./PaneStrip";
 import { MinRule } from "./PaneRules";
-import { HideButton, OnView, PaneBar, Side, ViewChoice } from "./PaneBar";
+import { HideButton, OnView, PaneBar, Side, useDragHandlers, ViewChoice } from "./PaneBar";
+import { PopOutLink } from "./PopOutLink";
 import { useRouterState } from "@tanstack/react-router";
 import { isShown, viewOf } from "./paneStore";
 import { applyWidth, useEdgeDrag } from "./useEdgeDrag";
@@ -118,6 +119,8 @@ export function Pane({
     }
     if (index !== place) move(id, index);
   };
+  // the title drags the pane along the row as the name on the bar does
+  const titleDrag = useDragHandlers((e) => moveTo(e.clientX), dropped);
 
   if (hidden) return null;
   return (
@@ -164,10 +167,14 @@ export function Pane({
       >
         {!collapsed && (
           <div className="max-md:hidden flex-none flex flex-row items-center gap-2 border-b border-slate-800 text-xs font-semibold text-slate-300">
+            <span className="ps-1 flex items-center">
+              <PopOutLink label={label} pathname={pathname} pane={viewOf(id)} />
+            </span>
             <button
-              className="unstyled flex-1 min-w-0 truncate text-left !px-1 !py-1 hover:text-white"
-              title={`Double-click to focus ${label} (it open, the rest collapsed)`}
+              className="unstyled flex-1 min-w-0 truncate text-left !px-1 !py-1 hover:text-white touch-none cursor-move"
+              title={`Drag: move ${label} along the row, or out of the window into one of its own. Double-click: focus it (it open, the rest collapsed)`}
               onDoubleClick={() => jumpTo(id)}
+              {...titleDrag}
             >
               {label}
             </button>

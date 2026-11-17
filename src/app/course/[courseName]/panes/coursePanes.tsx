@@ -152,7 +152,8 @@ export const coursePanes: CoursePane[] = [
   },
   {
     id: "calendar",
-    defaultWidth: 560,
+    // wide enough for the week grid with the day names spelled out (see --container-names)
+    defaultWidth: 800,
     label: "Calendar",
     icon: <CalendarIcon />,
     Content: Calendar,
@@ -162,7 +163,7 @@ export const coursePanes: CoursePane[] = [
     defaultWidth: 220,
     label: "Modules",
     icon: <ModulesIcon />,
-    collapsedByDefault: () => window.innerWidth <= 1400,
+    collapsedByDefault: () => true,
     Content: Modules,
   },
   {
@@ -170,6 +171,7 @@ export const coursePanes: CoursePane[] = [
     defaultWidth: 300,
     label: "Editor",
     icon: <EditIcon />,
+    collapsedByDefault: () => true,
     Content: Editor,
   },
   {
@@ -177,6 +179,7 @@ export const coursePanes: CoursePane[] = [
     defaultWidth: 260,
     label: "Preview",
     icon: <PreviewIcon />,
+    collapsedByDefault: () => true,
     Content: Preview,
   },
   {
