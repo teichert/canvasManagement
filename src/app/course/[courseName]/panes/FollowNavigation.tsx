@@ -2,6 +2,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter, useRouterState } from "@tanstack/react-router";
 import { showPane, usePanes } from "@/components/panes/PaneStrip";
+import { isShown, viewOf } from "@/components/panes/paneStore";
 import { currentItemFromPath } from "../currentItem";
 import { announcePath, followPaths, tiedTo, usePopOutPane } from "./popOut";
 
@@ -17,7 +18,7 @@ export function FollowNavigation() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const router = useRouter();
   const popOut = usePopOutPane();
-  const { narrow, jumpTo } = usePanes();
+  const { narrow, panes, jumpTo, setCollapsed, addPane } = usePanes();
   const onItem = !!currentItemFromPath(pathname);
   // a pop-out follows the instance it's tied to (its ?pane stays, the route keeps it); a full instance announces where it goes
   useEffect(() => {
@@ -39,7 +40,22 @@ export function FollowNavigation() {
     if (narrow) {
       if (pathname !== actedOn.current) jumpTo(onItem ? "editor" : "calendar");
       actedOn.current = pathname;
-    } else if (previous.current && previous.current !== pathname && !onItem) showPane("calendar");
+    } else if (previous.current !== pathname) {
+      // going to an item shows it, as the item page of old did: an Editor or Preview already
+      // open is enough; one of them alone on the page but collapsed is expanded; otherwise
+      // (both collapsed, or neither on the page) both are added at the end of the row.
+      // Back to the course page: the calendar.
+      if (onItem) {
+        const itemPanes = panes.filter((p) => ["editor", "preview"].includes(viewOf(p.id)) && !p.hidden);
+        if (itemPanes.some(isShown)) {
+          // enough
+        } else if (itemPanes.length === 1) setCollapsed(itemPanes[0].id, false);
+        else {
+          addPane("editor");
+          addPane("preview");
+        }
+      } else if (previous.current) showPane("calendar");
+    }
     previous.current = pathname;
     // the actions are fresh each render; the path and the layout are what matter
     // eslint-disable-next-line react-hooks/exhaustive-deps

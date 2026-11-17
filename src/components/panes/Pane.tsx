@@ -1,5 +1,6 @@
 "use client";
 import { CSSProperties, ReactNode, RefObject, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { usePaneRegistration, usePanes } from "./PaneStrip";
 import { MinRule } from "./PaneRules";
 import { HideButton, OnView, PaneBar, Side, useDragHandlers, ViewChoice } from "./PaneBar";
@@ -78,12 +79,40 @@ export function Pane({
   };
   // a catalogue pane is hidden (the frame always renders it); an added copy is taken away
   const hide = () => (id.includes("#") ? removePane(id) : setHidden(id, true));
-  /** The pane dropped outside the window: off the page and into a window of its own. */
-  const dropped = (e: React.PointerEvent) => {
-    if (e.clientX < 0 || e.clientY < 0 || e.clientX > window.innerWidth || e.clientY > window.innerHeight) {
-      hide();
-      openPopOut(pathname, id);
+  // a drag of the pane (its name, its menu icon or its title): the pane leaves the row for
+  // the drag, a marker shows where it would land, a label by the pointer says what a drop
+  // does; outside the window, the pane goes into a window of its own
+  const [drag, setDrag] = useState<{ x: number; y: number; index: number; out: boolean; markerX: number; rowTop: number; rowHeight: number } | null>(null);
+  const outside = (e: React.PointerEvent) => e.clientX < 0 || e.clientY < 0 || e.clientX > window.innerWidth || e.clientY > window.innerHeight;
+  /** Where the pane would land: before the first other pane whose middle the pointer is left of, else last; and the marker's x. */
+  const dropAt = (clientX: number) => {
+    const rest = panes.filter((p) => p.id !== id && !p.hidden);
+    const boxes = rest.map((p) => paneElement(p.id)?.getBoundingClientRect());
+    let index = rest.length;
+    for (let i = 0; i < rest.length; i++) {
+      const box = boxes[i];
+      if (box && clientX < box.left + box.width / 2) {
+        index = i;
+        break;
+      }
     }
+    const last = boxes[boxes.length - 1];
+    const markerX = index < rest.length ? (boxes[index]?.left ?? 0) : (last?.right ?? 0);
+    // the index among every other pane, hidden ones included (the order lists them)
+    const among = panes.filter((p) => p.id !== id);
+    return { index: index < rest.length ? among.indexOf(rest[index]) : among.length, markerX };
+  };
+  const onMove = (e: React.PointerEvent) => {
+    const row = paneRef.current?.parentElement?.getBoundingClientRect();
+    setDrag({ x: e.clientX, y: e.clientY, out: outside(e), ...dropAt(e.clientX), rowTop: row?.top ?? 0, rowHeight: row?.height ?? 0 });
+  };
+  const onMoveEnd = (e: React.PointerEvent) => {
+    const d = drag;
+    setDrag(null);
+    if (outside(e)) {
+      hide();
+      openPopOut(pathname, viewOf(id));
+    } else if (d && d.index !== place) move(id, d.index);
   };
   // the content is built the first time the pane is shown, then kept (scroll, state)
   const [built, setBuilt] = useState(!collapsed);
@@ -94,10 +123,11 @@ export function Pane({
   // attributes during hydration, so a style from the document wouldn't reach the DOM
   const width = view?.width ?? defaultWidth;
   const hidden = view?.hidden ?? false;
-  // re-applied when the pane comes back from hidden: that's a new element
+  // re-applied when the pane comes back from hidden (that's a new element) and after a drag (which lifted it out)
+  const dragging = drag !== null;
   useLayoutEffect(() => {
-    if (paneRef.current) applyWidth(paneRef.current, { minWidth, width }, place);
-  }, [minWidth, width, place, hidden]);
+    if (paneRef.current && !dragging) applyWidth(paneRef.current, { minWidth, width }, place);
+  }, [minWidth, width, place, hidden, dragging]);
   const effectiveMin = view?.minWidth ?? minWidth;
   const maxWidth = view?.maxWidth ?? Infinity;
   // the open panes on either side of this bar, for its resize square: the
@@ -106,29 +136,33 @@ export function Pane({
   const leftPane = panes.slice(0, place).reverse().find(isShown);
   const rightPane = panes.slice(place).find(isShown);
   const sidePane = (side?: Side) => (side === "left" ? leftPane : side === "right" ? rightPane : undefined);
-  /** This pane moved to where the pointer is along the row: before the first bar whose middle the pointer is left of, else last. */
-  const moveTo = (clientX: number) => {
-    const rest = panes.filter((p) => p.id !== id);
-    let index = rest.length;
-    for (let i = 0; i < rest.length; i++) {
-      const box = !rest[i].hidden ? paneElement(rest[i].id)?.getBoundingClientRect() : undefined;
-      if (box && clientX < box.left + box.width / 2) {
-        index = i;
-        break;
-      }
-    }
-    if (index !== place) move(id, index);
-  };
   // the title drags the pane along the row as the name on the bar does
-  const titleDrag = useDragHandlers((e) => moveTo(e.clientX), dropped);
+  const titleDrag = useDragHandlers(onMove, onMoveEnd);
 
   if (hidden) return null;
   return (
+    <>
+    {drag &&
+      createPortal(
+        <>
+          {!drag.out && <div aria-hidden className="fixed z-50 w-0.5 bg-blue-400 pointer-events-none" style={{ left: drag.markerX - 1, top: drag.rowTop, height: drag.rowHeight }} />}
+          <div
+            aria-hidden
+            className="fixed z-50 pointer-events-none flex items-center gap-1 rounded border border-slate-600 bg-gray-900/95 px-2 py-1 text-xs font-semibold text-slate-200 shadow-lg shadow-black/50"
+            style={{ left: Math.min(Math.max(drag.x, 0), window.innerWidth - 220) + 12, top: Math.min(Math.max(drag.y, 0), window.innerHeight - 40) + 12 }}
+          >
+            {icon}
+            {drag.out ? `Drop: ${label} in a window of its own` : `Drop: ${label} here`}
+          </div>
+        </>,
+        document.body,
+      )}
     <div
       ref={paneRef}
       // the panes sit in the order the user dragged them into (CSS order,
       // so the frame's markup needn't move)
-      style={{ order: place } as CSSProperties}
+      // lifted out of the row while dragged (still in the DOM: the handle keeps the pointer)
+      style={{ order: place, ...(drag && { flex: "0 0 0px", width: 0, minWidth: 0, overflow: "hidden", visibility: "hidden" }) } as CSSProperties}
       className={
         "min-w-0 min-h-0 flex md:flex-row " +
         // narrow: every pane in the same grid cell, the unselected ones
@@ -148,8 +182,8 @@ export function Pane({
         views={views}
         onView={onView}
         square={{ left: leftPane?.label, right: rightPane?.label }}
-        onMove={(e) => moveTo(e.clientX)}
-        onMoveEnd={dropped}
+        onMove={onMove}
+        onMoveEnd={onMoveEnd}
         onToggle={toggle}
         onHide={hide}
         // the bar is the edge before this pane, and follows the pointer; from the square, the pane on
@@ -204,5 +238,6 @@ export function Pane({
         </div>
       </div>
     </div>
+    </>
   );
 }

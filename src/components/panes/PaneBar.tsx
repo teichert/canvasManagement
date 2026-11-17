@@ -72,11 +72,15 @@ export function ResizeSquare({
       data-resize-square
       // flush with the bar's top, its border over the bar's; the square is the square's, border
       // included: the bar's edge-drag cursor stops at it
-      className="flex-none grid grid-cols-2 w-[calc(100%+2px)] -mx-px -mt-px h-6 rounded border border-slate-600 overflow-hidden divide-x divide-slate-600 cursor-default"
+      className="relative flex-none grid grid-cols-2 w-[calc(100%+2px)] -mx-px -mt-px h-6 rounded border border-slate-600 overflow-hidden divide-x divide-slate-600 cursor-default"
       onPointerDown={(e) => e.stopPropagation()}
     >
       <Half side="left" label={sides.left} onDrag={onDrag} onDragEnd={onDragEnd} onReset={onReset} />
       <Half side="right" label={sides.right} onDrag={onDrag} onDragEnd={onDragEnd} onReset={onReset} />
+      {/* says what the square is for; the halves under it take the pointer */}
+      <span aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center text-[11px] leading-none text-slate-400">
+        ↔
+      </span>
     </div>
   );
 }

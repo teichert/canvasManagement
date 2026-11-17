@@ -108,12 +108,14 @@ export function PaneStrip({ children }: { children: ReactNode }) {
   const update = useCallback((change: (doc: PaneDoc) => PaneDoc) => {
     remember(paneDocKey, JSON.stringify(change(parseDoc(localStorage.getItem(paneDocKey)))));
   }, []);
-  // links (showPane) open panes the way the bar does: room made, on the panes as they are now;
-  // a view with several panes: the rightmost one
+  // links (showPane) open the first pane of the view on the page the way the bar
+  // does, room made, on the panes as they are now; with none on the page, a new
+  // pane of the view at the end of the row
   useEffect(() => {
     opener = (view) => {
-      const id = [...panes].reverse().find((p) => viewOf(p.id) === view)?.id ?? view;
-      update((d) => openWithRoom(d, panes, narrow ? undefined : measureRow(panes), id));
+      const pane = panes.find((p) => viewOf(p.id) === view && !p.hidden);
+      if (!pane) return update((d) => paneActions.add(d, panes.map((p) => p.id), view));
+      update((d) => openWithRoom(d, panes, narrow ? undefined : measureRow(panes), pane.id));
     };
     return () => {
       opener = undefined;
@@ -142,9 +144,14 @@ export function PaneStrip({ children }: { children: ReactNode }) {
   );
 }
 
-/** Shows a view's pane (expanded and on the page; the rightmost when it has several) from anywhere, a link outside the frame included. */
-export const showPane = (id: string) =>
-  opener ? opener(id) : remember(paneDocKey, JSON.stringify(paneActions.show(parseDoc(localStorage.getItem(paneDocKey)), id)));
+/** Shows a view's pane (the first on the page, expanded; a new one at the end when there is none) from anywhere, a link outside the frame included. */
+export const showPane = (id: string) => {
+  if (opener) return opener(id);
+  // no strip yet (the page is loading): the document alone says whether the view's pane is on the page
+  const doc = parseDoc(localStorage.getItem(paneDocKey));
+  const ids = [...new Set([...Object.keys(doc.panes ?? {}), ...(doc.added ?? []), id])];
+  remember(paneDocKey, JSON.stringify(doc.panes?.[id]?.hidden ? paneActions.add(doc, ids, id) : paneActions.show(doc, id)));
+};
 
 // the strip on the page, if any, opens a pane with room made (see
 // openWithRoom); a link outside a course's frame just writes the document
