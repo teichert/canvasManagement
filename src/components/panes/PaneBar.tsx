@@ -130,7 +130,7 @@ export type OnView = (view: string, e: React.MouseEvent) => void;
  * view's pop-out url (the middle button opens it in a tab, tied to
  * nothing); any other click goes to `onView`. The view this bar's pane
  * shows, if any, is marked. The menu icon dragged is the bar dragged
- * (`drag`), and the menu can end in one more action (`extra`).
+ * (`drag`), and the menu can end in more actions (`extras`).
  */
 export function ViewIcons({
   views,
@@ -141,7 +141,7 @@ export function ViewIcons({
   onView,
   menuSide,
   drag,
-  extra,
+  extras = [],
 }: {
   views: ViewChoice[];
   current?: string;
@@ -155,8 +155,8 @@ export function ViewIcons({
   menuSide: "left" | "right" | "below";
   /** A drag of the menu icon: the bar's own drag (see PaneBar). */
   drag?: { onDrag: (e: React.PointerEvent, startX: number) => void; onDragEnd: (e: React.PointerEvent) => void };
-  /** One more item at the end of the menu. */
-  extra?: { label: string; onClick: () => void };
+  /** More items at the end of the menu. */
+  extras?: { label: string; onClick: () => void }[];
 }) {
   const [menuAt, setMenuAt] = useState<{ top: number; left?: number; right?: number } | null>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -211,10 +211,11 @@ export function ViewIcons({
                 {v.label}
               </a>
             ))}
-            {extra && (
+            {extras.map((extra, i) => (
               <button
+                key={extra.label}
                 role="menuitem"
-                className="unstyled mt-1 w-full rounded border-t border-slate-800 px-2 py-1 text-left text-slate-400 hover:bg-slate-800/60 hover:text-white"
+                className={"unstyled w-full rounded px-2 py-1 text-left text-slate-400 hover:bg-slate-800/60 hover:text-white " + (i === 0 ? "mt-1 border-t border-slate-800" : "")}
                 onClick={(e) => {
                   e.stopPropagation();
                   setMenuAt(null);
@@ -223,7 +224,7 @@ export function ViewIcons({
               >
                 {extra.label}
               </button>
-            )}
+            ))}
           </div>
         </>
       )}
@@ -270,7 +271,7 @@ export function PaneBar({
   popOutHref,
   views,
   onView,
-  onCollapseAll,
+  collapseActions,
   square,
   onMove,
   onMoveEnd,
@@ -290,8 +291,8 @@ export function PaneBar({
   /** The views the pane can show, offered in the bar's menu. */
   views?: ViewChoice[];
   onView?: OnView;
-  /** Collapse every pane, at the end of the view menu. */
-  onCollapseAll?: () => void;
+  /** Collapsing panes in bulk, at the end of the view menu. */
+  collapseActions?: { label: string; onClick: () => void }[];
   /** The nearest open pane on either side of the bar, for the resize square. */
   square: Partial<Record<Side, string>>;
   /** Moves this pane along the row to where the pointer is (a drag of its name). */
@@ -339,7 +340,7 @@ export function PaneBar({
           onView={onView}
           menuSide="right"
           drag={{ onDrag: (e, x) => onDrag(e, x), onDragEnd }}
-          extra={onCollapseAll && { label: "Collapse every pane", onClick: onCollapseAll }}
+          extras={collapseActions}
         />
       )}
       <span

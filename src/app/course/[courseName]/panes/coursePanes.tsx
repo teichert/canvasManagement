@@ -84,8 +84,14 @@ const sameCourse = (a: PaneContext, b: PaneContext) => a.courseName === b.course
 const Calendar = memo(function Calendar({ courseName }: PaneContext) {
   return <CourseCalendar key={courseName} />;
 }, sameCourse);
+// its own boundary, like Home: it fetches when it mounts, and a suspension
+// with no boundary in the pane climbs to the route and remounts the whole frame
 const Modules = memo(function Modules({ courseName }: PaneContext) {
-  return <ModulesContent key={courseName} />;
+  return (
+    <SuspenseAndErrorHandling>
+      <ModulesContent key={courseName} />
+    </SuspenseAndErrorHandling>
+  );
 }, sameCourse);
 
 /** A pane with nothing to show here says so instead. */
@@ -227,11 +233,13 @@ export const coursePanes: CoursePane[] = [
     collapsedByDefault: () => true,
     Content: memo(function Import() {
       return (
-        <div className="flex justify-center pt-3">
-          <div className="w-full max-w-7xl min-w-0 px-3 pb-12">
-            <ImportFromCanvas />
+        <SuspenseAndErrorHandling>
+          <div className="flex justify-center pt-3">
+            <div className="w-full max-w-7xl min-w-0 px-3 pb-12">
+              <ImportFromCanvas />
+            </div>
           </div>
-        </div>
+        </SuspenseAndErrorHandling>
       );
     }),
   },
@@ -244,9 +252,11 @@ export const coursePanes: CoursePane[] = [
     collapsedByDefault: () => true,
     Content: memo(function Errors() {
       return (
-        <ClientOnly>
-          <ErrorLogPage />
-        </ClientOnly>
+        <SuspenseAndErrorHandling>
+          <ClientOnly>
+            <ErrorLogPage />
+          </ClientOnly>
+        </SuspenseAndErrorHandling>
       );
     }),
   },
@@ -258,11 +268,13 @@ export const coursePanes: CoursePane[] = [
     collapsedByDefault: () => true,
     Content: memo(function Settings() {
       return (
-        <div className="flex justify-center pt-3">
-          <div className="w-full max-w-3xl min-w-0 px-3 pb-12">
-            <AllSettings />
+        <SuspenseAndErrorHandling>
+          <div className="flex justify-center pt-3">
+            <div className="w-full max-w-3xl min-w-0 px-3 pb-12">
+              <AllSettings />
+            </div>
           </div>
-        </div>
+        </SuspenseAndErrorHandling>
       );
     }),
   },

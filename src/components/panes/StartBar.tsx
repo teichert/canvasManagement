@@ -6,12 +6,13 @@ import { openPopOut, popOutUrl } from "@/app/course/[courseName]/panes/popOut";
 
 /**
  * The bar before the first pane, with no pane of its own, the end bar's
- * mirror: the views (see ViewIcons), a click opening a new pane of that
- * view at the start of the row; Shift-click opens the view in a new window
- * following this one.
+ * mirror: the views (see ViewIcons), a click showing the view's pane (see
+ * usePanes().showView) or opening a new one at the start of the row when
+ * there is none (Ctrl-click: a new one regardless); Shift-click opens the
+ * view in a new window following this one.
  */
 export function StartBar({ views }: { views: ViewChoice[] }) {
-  const { narrow, addPaneFirst, setAllCollapsed } = usePanes();
+  const { narrow, addPaneFirst, showView, setAllCollapsed } = usePanes();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   if (narrow) return null;
   return (
@@ -25,11 +26,11 @@ export function StartBar({ views }: { views: ViewChoice[] }) {
     >
       <ViewIcons
         views={views}
-        hint="a new pane of it at the start of the row. Shift: in a new window following this one"
+        hint="show its pane (its first open one, else its first, expanded), or a new one at the start of the row when there is none. Ctrl: a new one at the start. Shift: in a new window following this one"
         hrefOf={(view) => popOutUrl(pathname, view)}
-        onView={(view, e) => (e.shiftKey && !e.ctrlKey && !e.metaKey ? openPopOut(pathname, view, true) : addPaneFirst(view))}
+        onView={(view, e) => (e.shiftKey && !e.ctrlKey && !e.metaKey ? openPopOut(pathname, view, true) : e.ctrlKey || e.metaKey ? addPaneFirst(view) : showView(view, "start"))}
         menuSide="right"
-        extra={{ label: "Collapse every pane", onClick: () => setAllCollapsed(true) }}
+        extras={[{ label: "Collapse every pane", onClick: () => setAllCollapsed(true) }]}
       />
     </div>
   );

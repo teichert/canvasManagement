@@ -59,6 +59,9 @@ type Strip = {
   lead: number;
   /** Panes beyond the catalogue's: a view's second and later copies (see paneActions.add). */
   added: string[];
+  /** The pane briefly outlined, to show where it is (see usePanes().flash). */
+  flashing?: string;
+  flash: (id: string) => void;
   pins: Record<string, boolean>;
   register: (spec: PaneSpec) => () => void;
   updateSpec: (spec: PaneSpec) => void;
@@ -70,6 +73,7 @@ const StripContext = createContext<Strip>({
   lead: 0,
   added: [],
   narrow: false,
+  flash: () => {},
   pins: {},
   register: () => () => {},
   updateSpec: () => {},
@@ -106,6 +110,14 @@ export function PaneStrip({ children }: { children: ReactNode }) {
   const hydrated = useSyncExternalStore(subscribeToNothing, () => true, () => false);
   const narrow = useSyncExternalStore(subscribeToWidth, () => window.matchMedia(narrowQuery).matches, () => false);
   const panes = viewPanes(specs, parseDoc(json), hydrated);
+  const [flashing, setFlashing] = useState<string>();
+  const flash = useCallback((id: string) => setFlashing(id), []);
+  // timed from when the outline is on screen: a pane's first render can take a while
+  useEffect(() => {
+    if (!flashing) return;
+    const timer = setTimeout(() => setFlashing(undefined), 3000);
+    return () => clearTimeout(timer);
+  }, [flashing]);
   const update = useCallback((change: (doc: PaneDoc) => PaneDoc) => {
     remember(paneDocKey, JSON.stringify(change(parseDoc(localStorage.getItem(paneDocKey)))));
   }, []);
@@ -134,6 +146,8 @@ export function PaneStrip({ children }: { children: ReactNode }) {
         showing: showingPane(panes),
         lead: parseDoc(json).lead ?? 0,
         added: parseDoc(json).added ?? [],
+        flashing,
+        flash,
         pins: parseDoc(json).pins ?? {},
         register,
         updateSpec,
@@ -160,7 +174,7 @@ let opener: ((id: string) => void) | undefined;
 
 /** The panes on the page and what can be done to them; for the panes themselves and the phone's row. */
 export function usePanes() {
-  const { panes, narrow, showing, lead, added, update } = useContext(StripContext);
+  const { panes, narrow, showing, lead, added, flashing, flash, update } = useContext(StripContext);
   const ids = panes.map((p) => p.id);
   // measured when acted on, never while rendering; on a phone the widths
   // are the screen's and aren't kept
@@ -177,11 +191,34 @@ export function usePanes() {
     showing,
     lead,
     added,
+    flashing,
+    flash,
     setHidden: (id: string, hidden: boolean) => update((d) => paneActions.setHidden(d, id, hidden)),
     /** Another pane of a view, open, after the pane given or at the end of the row. */
     addPane: (view: string, after?: string) => update((d) => paneActions.add(d, ids, view, after === undefined ? undefined : ids.indexOf(after) + 1)),
     /** Another pane of a view, open, at the start of the row. */
     addPaneFirst: (view: string) => update((d) => paneActions.add(d, ids, view, 0)),
+    /**
+     * A view asked for from an edge bar: its first open pane is shown where it
+     * is (outlined for a moment); with none open, its first pane is expanded
+     * and outlined; with none on the page, a new one at that end of the row.
+     */
+    showView: (view: string, end: "start" | "end") => {
+      const existing = panes.filter((p) => viewOf(p.id) === view && !p.hidden);
+      if (!existing.length) {
+        const id = freeId(ids, view);
+        update((d) => paneActions.add(d, ids, view, end === "start" ? 0 : undefined));
+        return flash(id);
+      }
+      const pane = existing.find(isShown) ?? existing[0];
+      if (!isShown(pane)) {
+        const r = row();
+        update((d) => openWithRoom(d, panes, r, pane.id));
+      }
+      flash(pane.id);
+    },
+    /** These panes collapsed (the rest left as they are). */
+    collapse: (which: string[]) => update((d) => paneActions.setAllCollapsed(frozen(d), which, true)),
     /** The pane showing another view instead, in its place (see paneActions.switchView). */
     switchView: (id: string, view: string) => update((d) => paneActions.switchView(d, ids, id, view)),
     removePane: (id: string) => update((d) => paneActions.remove(d, id)),

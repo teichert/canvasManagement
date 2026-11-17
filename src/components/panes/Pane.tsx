@@ -61,7 +61,7 @@ export function Pane({
   children: ReactNode;
 }) {
   usePaneRegistration({ id, label, icon, minWidth, defaultWidth, collapsedByDefault, ssr });
-  const { panes, narrow, showing, setCollapsed, setAllCollapsed, setHidden, removePane, addPane, switchView, setLimits, setWidths, jumpTo, move } = usePanes();
+  const { panes, narrow, showing, flashing, setCollapsed, setAllCollapsed, collapse, setHidden, removePane, addPane, switchView, setLimits, setWidths, jumpTo, move } = usePanes();
   const { dragEdge, endDrag } = useEdgeDrag();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const popOutHref = { pathname, pane: viewOf(id) };
@@ -169,7 +169,9 @@ export function Pane({
         // invisible but laid out, so they keep their scroll
         "max-md:flex-col max-md:[grid-area:1/1] max-md:max-w-none! " +
         (selected ? "" : "max-md:invisible ") +
-        (collapsed ? "md:flex-none! md:min-w-0! md:max-w-none!" : "")
+        (collapsed ? "md:flex-none! md:min-w-0! md:max-w-none! " : "") +
+        // outlined for a moment: an edge bar's icon pointing at it (see usePanes().showView)
+        (flashing === id ? "rounded ring-2 ring-blue-400 animate-pulse" : "")
       }
       data-pane={id}
     >
@@ -181,7 +183,11 @@ export function Pane({
         popOutHref={popOutHref}
         views={views}
         onView={onView}
-        onCollapseAll={() => setAllCollapsed(true)}
+        collapseActions={[
+          { label: "Collapse every pane", onClick: () => setAllCollapsed(true) },
+          { label: "Collapse the panes to the left", onClick: () => collapse(panes.slice(0, place).map((p) => p.id)) },
+          { label: "Collapse the panes to the right", onClick: () => collapse(panes.slice(place + 1).map((p) => p.id)) },
+        ]}
         square={{ left: leftPane?.label, right: rightPane?.label }}
         onMove={onMove}
         onMoveEnd={onMoveEnd}

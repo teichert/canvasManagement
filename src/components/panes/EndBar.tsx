@@ -12,11 +12,13 @@ import { openPopOut, popOutUrl } from "@/app/course/[courseName]/panes/popOut";
  * its resize square's left half resizes the last pane past its limits, as
  * any bar's does for the pane on its left; its right half, with no pane
  * there, moves the edge as the bar does. Under the square, the views (see
- * ViewIcons): a click opens a new pane of that view at the end of the row;
- * Shift-click opens the view in a new window following this one.
+ * ViewIcons): a click shows the view's first open pane where it is, or
+ * expands its first pane, or, with none on the page, opens a new one at the
+ * end of the row (Ctrl-click: a new one regardless); Shift-click opens the
+ * view in a new window following this one.
  */
 export function EndBar({ views = [] }: { views?: ViewChoice[] }) {
-  const { panes, narrow, setLimits, setWidths, addPane, setAllCollapsed } = usePanes();
+  const { panes, narrow, setLimits, setWidths, addPane, showView, setAllCollapsed } = usePanes();
   const { dragEdge, endDrag } = useEdgeDrag();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const handlers = useDragHandlers((e, x) => dragEdge(panes.length, e.clientX - x), endDrag);
@@ -47,12 +49,12 @@ export function EndBar({ views = [] }: { views?: ViewChoice[] }) {
       {views.length > 0 && (
         <ViewIcons
           views={views}
-          hint="a new pane of it at the end of the row. Shift: in a new window following this one"
+          hint="show its pane (its first open one, else its first, expanded), or a new one at the end of the row when there is none. Ctrl: a new one at the end. Shift: in a new window following this one"
           hrefOf={(view) => popOutUrl(pathname, view)}
-          onView={(view, e) => (e.shiftKey && !e.ctrlKey && !e.metaKey ? openPopOut(pathname, view, true) : addPane(view))}
+          onView={(view, e) => (e.shiftKey && !e.ctrlKey && !e.metaKey ? openPopOut(pathname, view, true) : e.ctrlKey || e.metaKey ? addPane(view) : showView(view, "end"))}
           menuSide="left"
           drag={{ onDrag: (e, x) => dragEdge(panes.length, e.clientX - x), onDragEnd: endDrag }}
-          extra={{ label: "Collapse every pane", onClick: () => setAllCollapsed(true) }}
+          extras={[{ label: "Collapse every pane", onClick: () => setAllCollapsed(true) }]}
         />
       )}
     </div>
