@@ -135,7 +135,7 @@ export function ViewIcons({
   hrefOf,
   onView,
   menuSide,
-  moveHandlers,
+  move,
 }: {
   views: ViewChoice[];
   current?: string;
