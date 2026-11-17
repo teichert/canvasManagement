@@ -121,16 +121,17 @@ export type ViewChoice = { id: string; label: string; icon: ReactNode };
 export type OnView = (view: string, e: React.MouseEvent) => void;
 
 /**
- * The views, as a stack of icons down a bar: first a menu with their names
- * (and icons, so the icons are explained), then one icon each. Each is a
- * link to the view's pop-out url (the middle button opens it in a tab,
- * tied to nothing); any other click goes to `onView`. The view this bar's
- * pane shows, if any, is marked; it and the menu icon are the handles to
- * drag the pane by (`move`).
+ * The views on a bar: a menu icon that lists them by name (with their
+ * icons), and, with `stack`, one icon each under it. Each is a link to the
+ * view's pop-out url (the middle button opens it in a tab, tied to
+ * nothing); any other click goes to `onView`. The view this bar's pane
+ * shows, if any, is marked; it and the menu icon are the handles to drag
+ * the pane by (`move`).
  */
 export function ViewIcons({
   views,
   current,
+  stack = true,
   hint,
   hrefOf,
   onView,
@@ -139,6 +140,8 @@ export function ViewIcons({
 }: {
   views: ViewChoice[];
   current?: string;
+  /** The icons under the menu icon; without, the menu alone. */
+  stack?: boolean;
   /** What a click does, after the view's name in the tooltip. */
   hint: string;
   hrefOf: (view: string) => string;
@@ -204,8 +207,9 @@ export function ViewIcons({
           </div>
         </>
       )}
-      {views.map((v) =>
-        v.id === current ? (
+      {stack &&
+        views.map((v) =>
+          v.id === current ? (
           <span
             key={v.id}
             className={icon + "text-blue-300 touch-none cursor-move"}
@@ -227,15 +231,15 @@ export function ViewIcons({
             {v.icon}
           </a>
         ),
-      )}
+        )}
     </>
   );
 }
 
 /**
- * A pane's bar, on its left edge: its name along it, bottom-up (expanded,
- * the view icons take the name's place: a click gives the pane that view,
- * see Pane). A click
+ * A pane's bar, on its left edge: under the resize square a menu of the
+ * views (a pick gives the pane that view, see Pane), then its name along
+ * it, bottom-up. A click
  * collapses or expands the pane; a drag moves the edge within every pane's
  * limits (the caller says what that resizes; it gets where the drag
  * started); the resize square at the top resizes one pane past its limits,
@@ -267,7 +271,7 @@ export function PaneBar({
   onMax: (max: number | undefined) => void;
   /** What the page shows and which view this pane shows: the view icons' pop-out urls, and the marked one. */
   popOutHref: { pathname: string; pane: string };
-  /** The views the pane can show, offered on the bar while it is expanded. */
+  /** The views the pane can show, offered in the bar's menu. */
   views?: ViewChoice[];
   onView?: OnView;
   /** The nearest open pane on either side of the bar, for the resize square. */
@@ -307,25 +311,25 @@ export function PaneBar({
       }}
     >
       <ResizeSquare sides={square} onDrag={onDrag} onDragEnd={onDragEnd} onReset={onReset} />
-      {!collapsed && views && onView ? (
+      {views && onView && (
         <ViewIcons
           views={views}
           current={popOutHref.pane}
+          stack={false}
           hint="show it in this pane. Ctrl: a new pane of it next to this one. Ctrl+Shift: at the end of the row. Shift: in a new window following this one"
           hrefOf={(view) => `${popOutHref.pathname}?pane=${view}`}
           onView={onView}
           menuSide="right"
           move={{ onMove, onMoveEnd }}
         />
-      ) : (
-        <span
-          className="[writing-mode:vertical-rl] rotate-180 whitespace-nowrap touch-none cursor-move hover:text-white"
-          title={`Drag: move ${label} along the row, or out of the window into one of its own`}
-          {...nameHandlers}
-        >
-          {label}
-        </span>
       )}
+      <span
+        className="[writing-mode:vertical-rl] rotate-180 whitespace-nowrap touch-none cursor-move hover:text-white"
+        title={`Drag: move ${label} along the row, or out of the window into one of its own`}
+        {...nameHandlers}
+      >
+        {label}
+      </span>
       {collapsed && (
         <span className="mt-auto">
           <HideButton label={label} onHide={onHide} />
