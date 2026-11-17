@@ -111,7 +111,7 @@ export function CourseFrame({ children }: { children: ReactNode }) {
           <BreadCrumbs term={settings?.startDate ? getTermName(settings.startDate) : undefined} />
           <TopBar onCoursePage={onCoursePage} />
         </div>
-        <PaneSelect />
+        <PaneSelect views={views} />
         {/* narrow: one grid cell every pane shares, the selected one visible */}
         <div className="min-h-0 flex-1 md:flex md:flex-row md:gap-0.5 max-md:grid">
           <StartBar views={views} />

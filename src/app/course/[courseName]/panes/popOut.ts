@@ -55,10 +55,32 @@ export function announcePath(pathname: string) {
   own.postMessage(pathname);
 }
 
-/** A pop-out follows the instance it's tied to; returns the way to stop. */
+/** A full instance goes where a pop-out tied to it went on its own (a link clicked there); returns the way to stop. */
+export function followPopOuts(onPath: (pathname: string) => void) {
+  own ??= channel(instanceId());
+  own.onmessage = (e) => {
+    if (typeof e.data === "object" && e.data?.from === "popOut") onPath(String(e.data.path));
+  };
+  return () => {
+    if (own) own.onmessage = null;
+  };
+}
+
+// a pop-out's channel to its instance, kept open like the instance's own (see above)
+let toInstance: BroadcastChannel | undefined;
+
+/** A pop-out tells the instance it's tied to where it went on its own. */
+export function tellInstance(id: string, pathname: string) {
+  toInstance ??= channel(id);
+  toInstance.postMessage({ from: "popOut", path: pathname });
+}
+
+/** A pop-out follows the instance it's tied to (a path, not a pop-out's message); returns the way to stop. */
 export function followPaths(id: string, onPath: (pathname: string) => void) {
   const c = channel(id);
-  c.onmessage = (e) => onPath(String(e.data));
+  c.onmessage = (e) => {
+    if (typeof e.data === "string") onPath(e.data);
+  };
   return () => c.close();
 }
 

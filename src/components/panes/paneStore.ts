@@ -86,7 +86,7 @@ export const isShown = (pane: PaneView) => !pane.hidden && !pane.collapsed;
 export const viewOf = (id: string) => id.split("#")[0];
 
 /** The lowest-numbered id of `view` not among `ids`. */
-const freeId = (ids: string[], view: string) => {
+export const freeId = (ids: string[], view: string) => {
   let n = 2;
   while (ids.includes(`${view}#${n}`)) n++;
   return `${view}#${n}`;
