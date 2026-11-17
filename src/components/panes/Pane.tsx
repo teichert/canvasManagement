@@ -222,6 +222,18 @@ export function Pane({
             >
               {label}
             </button>
+            <button
+              className="unstyled !p-0 !px-1 leading-none text-slate-500 hover:text-slate-200"
+              aria-label={`Collapse ${label}`}
+              title={`Collapse ${label} to its bar`}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                setCollapsed(id, true);
+              }}
+            >
+              &ndash;
+            </button>
             <HideButton label={label} onHide={hide} />
           </div>
         )}
