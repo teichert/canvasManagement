@@ -178,7 +178,9 @@ export function usePanes() {
     added,
     setHidden: (id: string, hidden: boolean) => update((d) => paneActions.setHidden(d, id, hidden)),
     /** Another pane of a view, open, after the pane given or at the end of the row. */
-    addPane: (view: string, after?: string) => update((d) => paneActions.add(d, ids, view, after)),
+    addPane: (view: string, after?: string) => update((d) => paneActions.add(d, ids, view, after === undefined ? undefined : ids.indexOf(after) + 1)),
+    /** Another pane of a view, open, at the start of the row. */
+    addPaneFirst: (view: string) => update((d) => paneActions.add(d, ids, view, 0)),
     /** The pane showing another view instead, in its place (see paneActions.switchView). */
     switchView: (id: string, view: string) => update((d) => paneActions.switchView(d, ids, id, view)),
     removePane: (id: string) => update((d) => paneActions.remove(d, id)),

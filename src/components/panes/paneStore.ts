@@ -248,11 +248,10 @@ export const paneActions = {
     ),
   move: (doc: PaneDoc, ids: string[], id: string, index: number) => ({ ...doc, order: movePane(ids, id, index) }),
   setPinned: (doc: PaneDoc, key: string, pinned: boolean) => ({ ...doc, pins: { ...doc.pins, [key]: pinned } }),
-  /** Another pane of `view` (its lowest free number), open, after the pane `after` or at the end of the row. */
-  add: (doc: PaneDoc, ids: string[], view: string, after?: string): PaneDoc => {
+  /** Another pane of `view` (its lowest free number), open, at `index` in the row (none: at the end). */
+  add: (doc: PaneDoc, ids: string[], view: string, index?: number): PaneDoc => {
     const id = freeId(ids, view);
-    const at = after === undefined ? -1 : ids.indexOf(after);
-    const order = at === -1 ? undefined : [...ids.slice(0, at + 1), id, ...ids.slice(at + 1)];
+    const order = index === undefined ? undefined : [...ids.slice(0, index), id, ...ids.slice(index)];
     return { ...withPane(doc, id, { collapsed: false }), ...(order && { order }), added: [...(doc.added ?? []), id] };
   },
   /**

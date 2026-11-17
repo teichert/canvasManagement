@@ -193,7 +193,8 @@ describe("a pane switched to another view", () => {
     expect(again.added).toEqual(["preview#2"]);
     expect(again.panes?.["editor#2"]).toBeUndefined();
   });
-  it("adds after a pane when asked", () => {
-    expect(paneActions.add({}, ids, "editor", "calendar").order).toEqual(["calendar", "editor#2", "editor"]);
+  it("adds at a place in the row when asked", () => {
+    expect(paneActions.add({}, ids, "editor", 1).order).toEqual(["calendar", "editor#2", "editor"]);
+    expect(paneActions.add({}, ids, "editor", 0).order).toEqual(["editor#2", "calendar", "editor"]);
   });
 });

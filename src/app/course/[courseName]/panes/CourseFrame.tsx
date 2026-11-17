@@ -3,6 +3,7 @@ import { ReactNode, useMemo } from "react";
 import { useMatches } from "@tanstack/react-router";
 import { Pane } from "@/components/panes/Pane";
 import { EndBar } from "@/components/panes/EndBar";
+import { StartBar } from "@/components/panes/StartBar";
 import { PaneStrip, usePanes, usePinned } from "@/components/panes/PaneStrip";
 import { PaneSelect } from "@/components/panes/PaneSelect";
 import { viewOf } from "@/components/panes/paneStore";
@@ -94,6 +95,7 @@ export function CourseFrame({ children }: { children: ReactNode }) {
         <PaneSelect />
         {/* narrow: one grid cell every pane shares, the selected one visible */}
         <div className="min-h-0 flex-1 md:flex md:flex-row md:gap-0.5 max-md:grid">
+          <StartBar views={views} />
           <LeadSpacer />
           {panes.map(({ Content, ...pane }) => (
             // the server renders what the first screen shows: the course page's calendar
