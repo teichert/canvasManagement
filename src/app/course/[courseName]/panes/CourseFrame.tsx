@@ -1,6 +1,8 @@
 "use client";
 import { ReactNode, useMemo } from "react";
-import { useMatches } from "@tanstack/react-router";
+import { useMatches, useRouter, useRouterState } from "@tanstack/react-router";
+import { ViewIcons } from "@/components/panes/PaneBar";
+import { openPopOut, popOutUrl } from "./popOut";
 import { Pane } from "@/components/panes/Pane";
 import { EndBar } from "@/components/panes/EndBar";
 import { StartBar } from "@/components/panes/StartBar";
@@ -53,6 +55,8 @@ export function CourseFrame({ children }: { children: ReactNode }) {
   ];
   const views = coursePanes.map(({ id, label, icon }) => ({ id, label, icon }));
   const popOut = usePopOutPane();
+  const router = useRouter();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   // the same object while nothing changed, so memoized pane contents are skipped
   const ctx: PaneContext = useMemo(() => ({ courseName, item, onCoursePage }), [courseName, item, onCoursePage]);
   if (popOut) {
@@ -63,6 +67,21 @@ export function CourseFrame({ children }: { children: ReactNode }) {
         <ItemEditing item={item} />
         <div className="h-full flex flex-col px-1 w-full bg-gray-900 rounded">
           <div className="py-1 flex flex-row flex-nowrap items-center gap-x-2">
+            {/* the view this window shows, or with Ctrl or Shift another window of a view, following the same page */}
+            <ViewIcons
+              views={views}
+              current={viewOf(popOut)}
+              stack={false}
+              hint="show it in this window. Ctrl or Shift: in another window following the same page"
+              hrefOf={(view) => popOutUrl(pathname, view)}
+              onView={(view, e) =>
+                e.ctrlKey || e.metaKey || e.shiftKey
+                  ? openPopOut(pathname, view, e.shiftKey)
+                  : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    router.navigate({ to: pathname as any, search: { pane: view } as any })
+              }
+              menuSide="below"
+            />
             <BreadCrumbs term={settings?.startDate ? getTermName(settings.startDate) : undefined} popOut />
             <TopBar onCoursePage={onCoursePage} />
           </div>

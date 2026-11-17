@@ -194,6 +194,7 @@ export function usePanes() {
     setLimits: (id: string, limits: { min?: number; max?: number }) => update((d) => paneActions.setLimits(d, id, limits)),
     /** This pane open, the rest collapsed: on a phone, the one showing. */
     jumpTo: (id: string) => update((d) => paneActions.jumpTo(frozen(d), ids, id)),
+    setAllCollapsed: (collapsed: boolean) => update((d) => paneActions.setAllCollapsed(frozen(d), ids, collapsed)),
     /** Widths from the sizing rules, and the limits a drag from a resize square moved (see limitsAfter). */
     setWidths: (widths: Record<string, number>, moved?: { id: string; min?: number; max?: number }) =>
       update((d) => {

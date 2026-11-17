@@ -16,7 +16,7 @@ import { openPopOut, popOutUrl } from "@/app/course/[courseName]/panes/popOut";
  * Shift-click opens the view in a new window following this one.
  */
 export function EndBar({ views = [] }: { views?: ViewChoice[] }) {
-  const { panes, narrow, setLimits, setWidths, addPane } = usePanes();
+  const { panes, narrow, setLimits, setWidths, addPane, setAllCollapsed } = usePanes();
   const { dragEdge, endDrag } = useEdgeDrag();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const handlers = useDragHandlers((e, x) => dragEdge(panes.length, e.clientX - x), endDrag);
@@ -51,6 +51,8 @@ export function EndBar({ views = [] }: { views?: ViewChoice[] }) {
           hrefOf={(view) => popOutUrl(pathname, view)}
           onView={(view, e) => (e.shiftKey && !e.ctrlKey && !e.metaKey ? openPopOut(pathname, view, true) : addPane(view))}
           menuSide="left"
+          drag={{ onDrag: (e, x) => dragEdge(panes.length, e.clientX - x), onDragEnd: endDrag }}
+          extra={{ label: "Collapse every pane", onClick: () => setAllCollapsed(true) }}
         />
       )}
     </div>

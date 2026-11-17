@@ -61,7 +61,7 @@ export function Pane({
   children: ReactNode;
 }) {
   usePaneRegistration({ id, label, icon, minWidth, defaultWidth, collapsedByDefault, ssr });
-  const { panes, narrow, showing, setCollapsed, setHidden, removePane, addPane, switchView, setLimits, setWidths, jumpTo, move } = usePanes();
+  const { panes, narrow, showing, setCollapsed, setAllCollapsed, setHidden, removePane, addPane, switchView, setLimits, setWidths, jumpTo, move } = usePanes();
   const { dragEdge, endDrag } = useEdgeDrag();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const popOutHref = { pathname, pane: viewOf(id) };
@@ -181,6 +181,7 @@ export function Pane({
         popOutHref={popOutHref}
         views={views}
         onView={onView}
+        onCollapseAll={() => setAllCollapsed(true)}
         square={{ left: leftPane?.label, right: rightPane?.label }}
         onMove={onMove}
         onMoveEnd={onMoveEnd}

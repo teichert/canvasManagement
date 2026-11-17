@@ -40,11 +40,12 @@ export function FollowNavigation() {
     if (narrow) {
       if (pathname !== actedOn.current) jumpTo(onItem ? "editor" : "calendar");
       actedOn.current = pathname;
-    } else if (previous.current !== pathname) {
-      // going to an item shows it, as the item page of old did: an Editor or Preview already
-      // open is enough; one of them alone on the page but collapsed is expanded; otherwise
-      // (both collapsed, or neither on the page) both are added at the end of the row.
-      // Back to the course page: the calendar.
+    } else if (previous.current && previous.current !== pathname) {
+      // going to an item (within the app: a page loaded or reloaded keeps the panes as they
+      // were) shows it, as the item page of old did: an Editor or Preview already open is
+      // enough; one of them alone on the page but collapsed is expanded; otherwise (both
+      // collapsed, or neither on the page) both are added at the end of the row. Back to
+      // the course page: the calendar.
       if (onItem) {
         const itemPanes = panes.filter((p) => ["editor", "preview"].includes(viewOf(p.id)) && !p.hidden);
         if (itemPanes.some(isShown)) {
@@ -54,7 +55,7 @@ export function FollowNavigation() {
           addPane("editor");
           addPane("preview");
         }
-      } else if (previous.current) showPane("calendar");
+      } else showPane("calendar");
     }
     previous.current = pathname;
     // the actions are fresh each render; the path and the layout are what matter

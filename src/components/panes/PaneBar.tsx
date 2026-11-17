@@ -129,8 +129,8 @@ export type OnView = (view: string, e: React.MouseEvent) => void;
  * icons), and, with `stack`, one icon each under it. Each is a link to the
  * view's pop-out url (the middle button opens it in a tab, tied to
  * nothing); any other click goes to `onView`. The view this bar's pane
- * shows, if any, is marked; it and the menu icon are the handles to drag
- * the pane by (`move`).
+ * shows, if any, is marked. The menu icon dragged is the bar dragged
+ * (`drag`), and the menu can end in one more action (`extra`).
  */
 export function ViewIcons({
   views,
@@ -140,7 +140,8 @@ export function ViewIcons({
   hrefOf,
   onView,
   menuSide,
-  move,
+  drag,
+  extra,
 }: {
   views: ViewChoice[];
   current?: string;
@@ -150,21 +151,23 @@ export function ViewIcons({
   hint: string;
   hrefOf: (view: string) => string;
   onView: OnView;
-  /** Which side of the bar the menu opens on. */
-  menuSide: "left" | "right";
-  /** The drag that moves the pane along the row, from the marked icon or the menu icon (see PaneBar). */
-  move?: { onMove: (e: React.PointerEvent) => void; onMoveEnd: (e: React.PointerEvent) => void };
+  /** Where the menu opens: beside a vertical bar, or below a button in a horizontal one. */
+  menuSide: "left" | "right" | "below";
+  /** A drag of the menu icon: the bar's own drag (see PaneBar). */
+  drag?: { onDrag: (e: React.PointerEvent, startX: number) => void; onDragEnd: (e: React.PointerEvent) => void };
+  /** One more item at the end of the menu. */
+  extra?: { label: string; onClick: () => void };
 }) {
   const [menuAt, setMenuAt] = useState<{ top: number; left?: number; right?: number } | null>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
   const toggleMenu = () => {
     const r = menuButton.current?.getBoundingClientRect();
     if (!r) return;
-    setMenuAt(menuAt ? null : menuSide === "right" ? { top: r.top, left: r.right + 2 } : { top: r.top, right: window.innerWidth - r.left + 2 });
+    const at = menuSide === "right" ? { top: r.top, left: r.right + 2 } : menuSide === "left" ? { top: r.top, right: window.innerWidth - r.left + 2 } : { top: r.bottom + 2, left: r.left };
+    setMenuAt(menuAt ? null : at);
   };
-  const noMove = () => {};
-  const moveHandlers = useDragHandlers(move?.onMove ?? noMove, move?.onMoveEnd ?? noMove);
-  const menuHandlers = useDragHandlers(move?.onMove ?? noMove, move?.onMoveEnd ?? noMove, toggleMenu);
+  const none = () => {};
+  const menuHandlers = useDragHandlers(drag?.onDrag ?? none, drag?.onDragEnd ?? none, toggleMenu);
   const click = (view: string) => (e: React.MouseEvent) => {
     // a middle click is no click; the rest are ours
     e.preventDefault();
@@ -181,7 +184,7 @@ export function ViewIcons({
         className={icon + "text-slate-500 hover:text-slate-200 touch-none"}
         aria-label="Views by name"
         aria-expanded={menuAt !== null}
-        title={`The views by name. Each: ${hint}${move ? ". Drag: move the pane along the row" : ""}`}
+        title={`The views by name. Each: ${hint}${drag ? ". Drag: move this edge" : ""}`}
         {...menuHandlers}
       >
         <PanesIcon />
@@ -208,18 +211,26 @@ export function ViewIcons({
                 {v.label}
               </a>
             ))}
+            {extra && (
+              <button
+                role="menuitem"
+                className="unstyled mt-1 w-full rounded border-t border-slate-800 px-2 py-1 text-left text-slate-400 hover:bg-slate-800/60 hover:text-white"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuAt(null);
+                  extra.onClick();
+                }}
+              >
+                {extra.label}
+              </button>
+            )}
           </div>
         </>
       )}
       {stack &&
         views.map((v) =>
           v.id === current ? (
-          <span
-            key={v.id}
-            className={icon + "text-blue-300 touch-none cursor-move"}
-            title={`${v.label}, this pane's view. Drag: move the pane along the row, or out of the window into one of its own`}
-            {...moveHandlers}
-          >
+          <span key={v.id} className={icon + "text-blue-300"} title={`${v.label}, this pane's view`}>
             {v.icon}
           </span>
         ) : (
@@ -259,6 +270,7 @@ export function PaneBar({
   popOutHref,
   views,
   onView,
+  onCollapseAll,
   square,
   onMove,
   onMoveEnd,
@@ -278,6 +290,8 @@ export function PaneBar({
   /** The views the pane can show, offered in the bar's menu. */
   views?: ViewChoice[];
   onView?: OnView;
+  /** Collapse every pane, at the end of the view menu. */
+  onCollapseAll?: () => void;
   /** The nearest open pane on either side of the bar, for the resize square. */
   square: Partial<Record<Side, string>>;
   /** Moves this pane along the row to where the pointer is (a drag of its name). */
@@ -324,7 +338,8 @@ export function PaneBar({
           hrefOf={(view) => `${popOutHref.pathname}?pane=${view}`}
           onView={onView}
           menuSide="right"
-          move={{ onMove, onMoveEnd }}
+          drag={{ onDrag: (e, x) => onDrag(e, x), onDragEnd }}
+          extra={onCollapseAll && { label: "Collapse every pane", onClick: onCollapseAll }}
         />
       )}
       <span
@@ -333,6 +348,15 @@ export function PaneBar({
         {...nameHandlers}
       >
         {label}
+      </span>
+      {/* a grip under the name: the name is the handle to move the pane by */}
+      <span
+        aria-hidden
+        className="select-none touch-none cursor-move leading-none text-slate-500 hover:text-slate-200"
+        title={`Drag: move ${label} along the row, or out of the window into one of its own`}
+        {...nameHandlers}
+      >
+        ⋮⋮
       </span>
       {collapsed && (
         <span className="mt-auto">

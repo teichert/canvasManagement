@@ -11,7 +11,7 @@ import { openPopOut, popOutUrl } from "@/app/course/[courseName]/panes/popOut";
  * following this one.
  */
 export function StartBar({ views }: { views: ViewChoice[] }) {
-  const { narrow, addPaneFirst } = usePanes();
+  const { narrow, addPaneFirst, setAllCollapsed } = usePanes();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   if (narrow) return null;
   return (
@@ -29,6 +29,7 @@ export function StartBar({ views }: { views: ViewChoice[] }) {
         hrefOf={(view) => popOutUrl(pathname, view)}
         onView={(view, e) => (e.shiftKey && !e.ctrlKey && !e.metaKey ? openPopOut(pathname, view, true) : addPaneFirst(view))}
         menuSide="right"
+        extra={{ label: "Collapse every pane", onClick: () => setAllCollapsed(true) }}
       />
     </div>
   );

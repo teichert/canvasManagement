@@ -247,6 +247,7 @@ export const paneActions = {
       lead === undefined ? doc : { ...doc, lead: Math.max(Math.round(lead), 0) },
     ),
   move: (doc: PaneDoc, ids: string[], id: string, index: number) => ({ ...doc, order: movePane(ids, id, index) }),
+  setAllCollapsed: (doc: PaneDoc, ids: string[], collapsed: boolean) => ids.reduce((d, id) => withPane(d, id, { collapsed }), doc),
   setPinned: (doc: PaneDoc, key: string, pinned: boolean) => ({ ...doc, pins: { ...doc.pins, [key]: pinned } }),
   /** Another pane of `view` (its lowest free number), open, at `index` in the row (none: at the end). */
   add: (doc: PaneDoc, ids: string[], view: string, index?: number): PaneDoc => {
