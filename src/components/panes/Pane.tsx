@@ -60,7 +60,7 @@ export function Pane({
   children: ReactNode;
 }) {
   usePaneRegistration({ id, label, icon, minWidth, defaultWidth, collapsedByDefault, ssr });
-  const { panes, narrow, showing, setCollapsed, setHidden, removePane, addPane, switchView, setLimits, jumpTo, move } = usePanes();
+  const { panes, narrow, showing, setCollapsed, setHidden, removePane, addPane, switchView, setLimits, setWidths, jumpTo, move } = usePanes();
   const { dragEdge, endDrag } = useEdgeDrag();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const popOutHref = { pathname, pane: viewOf(id) };
@@ -182,7 +182,19 @@ export function Pane({
           </div>
         )}
         {!collapsed && !narrow && (
-          <MinRule paneRef={paneRef} min={effectiveMin} label={label} onMin={(min) => setLimits(id, { min })} />
+          <MinRule
+            paneRef={paneRef}
+            min={effectiveMin}
+            label={label}
+            // past the pane's width, the pane follows the box, and keeps that width
+            onLive={(min) => {
+              if (paneRef.current && min > width) applyWidth(paneRef.current, { minWidth: min, width: min }, place);
+            }}
+            onMin={(min) => {
+              setLimits(id, { min });
+              if (min > width) setWidths({ [id]: min });
+            }}
+          />
         )}
         <div ref={bodyRef} className="min-w-0 min-h-0 flex-1 flex flex-col overflow-y-auto">
           {mounted && children}
