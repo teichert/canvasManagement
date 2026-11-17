@@ -61,7 +61,7 @@ export function Pane({
   children: ReactNode;
 }) {
   usePaneRegistration({ id, label, icon, minWidth, defaultWidth, collapsedByDefault, ssr });
-  const { panes, narrow, showing, flashing, setCollapsed, setAllCollapsed, collapse, setHidden, removePane, addPane, switchView, setLimits, setWidths, jumpTo, move } = usePanes();
+  const { panes, narrow, showing, flashing, setCollapsed, close, setHidden, removePane, addPane, switchView, setLimits, setWidths, jumpTo, move } = usePanes();
   const { dragEdge, endDrag } = useEdgeDrag();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const popOutHref = { pathname, pane: viewOf(id) };
@@ -183,10 +183,10 @@ export function Pane({
         popOutHref={popOutHref}
         views={views}
         onView={onView}
-        collapseActions={[
-          { label: "Collapse every pane", onClick: () => setAllCollapsed(true) },
-          { label: "Collapse the panes to the left", onClick: () => collapse(panes.slice(0, place).map((p) => p.id)) },
-          { label: "Collapse the panes to the right", onClick: () => collapse(panes.slice(place + 1).map((p) => p.id)) },
+        closeActions={[
+          { label: "Close every pane", onClick: () => close(panes.map((p) => p.id)) },
+          { label: "Close the panes to the left", onClick: () => close(panes.slice(0, place).map((p) => p.id)) },
+          { label: "Close the panes to the right", onClick: () => close(panes.slice(place + 1).map((p) => p.id)) },
         ]}
         square={{ left: leftPane?.label, right: rightPane?.label }}
         onMove={onMove}

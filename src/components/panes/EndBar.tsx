@@ -18,7 +18,7 @@ import { openPopOut, popOutUrl } from "@/app/course/[courseName]/panes/popOut";
  * view in a new window following this one.
  */
 export function EndBar({ views = [] }: { views?: ViewChoice[] }) {
-  const { panes, narrow, setLimits, setWidths, addPane, showView, setAllCollapsed } = usePanes();
+  const { panes, narrow, setLimits, setWidths, addPane, showView, close } = usePanes();
   const { dragEdge, endDrag } = useEdgeDrag();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const handlers = useDragHandlers((e, x) => dragEdge(panes.length, e.clientX - x), endDrag);
@@ -54,7 +54,7 @@ export function EndBar({ views = [] }: { views?: ViewChoice[] }) {
           onView={(view, e) => (e.shiftKey && !e.ctrlKey && !e.metaKey ? openPopOut(pathname, view, true) : e.ctrlKey || e.metaKey ? addPane(view) : showView(view, "end"))}
           menuSide="left"
           drag={{ onDrag: (e, x) => dragEdge(panes.length, e.clientX - x), onDragEnd: endDrag }}
-          extras={[{ label: "Collapse every pane", onClick: () => setAllCollapsed(true) }]}
+          extras={[{ label: "Close every pane", onClick: () => close(panes.map((p) => p.id)) }]}
         />
       )}
     </div>

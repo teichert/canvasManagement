@@ -271,7 +271,7 @@ export function PaneBar({
   popOutHref,
   views,
   onView,
-  collapseActions,
+  closeActions,
   square,
   onMove,
   onMoveEnd,
@@ -291,8 +291,8 @@ export function PaneBar({
   /** The views the pane can show, offered in the bar's menu. */
   views?: ViewChoice[];
   onView?: OnView;
-  /** Collapsing panes in bulk, at the end of the view menu. */
-  collapseActions?: { label: string; onClick: () => void }[];
+  /** Closing panes in bulk, at the end of the view menu. */
+  closeActions?: { label: string; onClick: () => void }[];
   /** The nearest open pane on either side of the bar, for the resize square. */
   square: Partial<Record<Side, string>>;
   /** Moves this pane along the row to where the pointer is (a drag of its name). */
@@ -340,7 +340,7 @@ export function PaneBar({
           onView={onView}
           menuSide="right"
           drag={{ onDrag: (e, x) => onDrag(e, x), onDragEnd }}
-          extras={collapseActions}
+          extras={closeActions}
         />
       )}
       <span

@@ -217,8 +217,8 @@ export function usePanes() {
       }
       flash(pane.id);
     },
-    /** These panes collapsed (the rest left as they are). */
-    collapse: (which: string[]) => update((d) => paneActions.setAllCollapsed(frozen(d), which, true)),
+    /** These panes closed as × closes them (see paneActions.close). */
+    close: (which: string[]) => update((d) => paneActions.close(frozen(d), which)),
     /** The pane showing another view instead, in its place (see paneActions.switchView). */
     switchView: (id: string, view: string) => update((d) => paneActions.switchView(d, ids, id, view)),
     removePane: (id: string) => update((d) => paneActions.remove(d, id)),
@@ -241,7 +241,6 @@ export function usePanes() {
         return paneActions.jumpTo(paneActions.add(d, ids, view), [...ids, id], id);
       });
     },
-    setAllCollapsed: (collapsed: boolean) => update((d) => paneActions.setAllCollapsed(frozen(d), ids, collapsed)),
     /** Widths from the sizing rules, and the limits a drag from a resize square moved (see limitsAfter). */
     setWidths: (widths: Record<string, number>, moved?: { id: string; min?: number; max?: number }) =>
       update((d) => {

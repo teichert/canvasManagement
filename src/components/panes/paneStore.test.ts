@@ -198,3 +198,10 @@ describe("a pane switched to another view", () => {
     expect(paneActions.add({}, ids, "editor", 0).order).toEqual(["editor#2", "calendar", "editor"]);
   });
 });
+
+describe("closing panes in bulk", () => {
+  it("hides catalogue panes and removes copies, as × does", () => {
+    const doc = paneActions.close({ added: ["editor#2"], panes: { "editor#2": { width: 1 } } }, ["calendar", "editor#2"]);
+    expect(doc).toEqual({ added: [], order: undefined, panes: { calendar: { hidden: true } } });
+  });
+});
