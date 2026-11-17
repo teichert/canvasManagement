@@ -22,6 +22,7 @@ import {
   parseDoc,
   shareRow,
   showingPane,
+  viewOf,
   viewPanes,
 } from "./paneStore";
 
@@ -56,6 +57,10 @@ type Strip = {
   showing?: string;
   /** Empty room before the first pane (see withLead). */
   lead: number;
+  /** Panes beyond the catalogue's: a view's second and later copies (see paneActions.add). */
+  added: string[];
+  /** The pane the view row marks on a wide window. */
+  current?: string;
   pins: Record<string, boolean>;
   register: (spec: PaneSpec) => () => void;
   updateSpec: (spec: PaneSpec) => void;
@@ -65,6 +70,7 @@ type Strip = {
 const StripContext = createContext<Strip>({
   panes: [],
   lead: 0,
+  added: [],
   narrow: false,
   pins: {},
   register: () => () => {},
@@ -105,9 +111,13 @@ export function PaneStrip({ children }: { children: ReactNode }) {
   const update = useCallback((change: (doc: PaneDoc) => PaneDoc) => {
     remember(paneDocKey, JSON.stringify(change(parseDoc(localStorage.getItem(paneDocKey)))));
   }, []);
-  // links (showPane) open panes the way the bar does: room made, on the panes as they are now
+  // links (showPane) open panes the way the bar does: room made, on the panes as they are now;
+  // a view with several panes: the rightmost one
   useEffect(() => {
-    opener = (id) => update((d) => openWithRoom(d, panes, narrow ? undefined : measureRow(panes), id));
+    opener = (view) => {
+      const id = [...panes].reverse().find((p) => viewOf(p.id) === view)?.id ?? view;
+      update((d) => paneActions.setCurrent(openWithRoom(d, panes, narrow ? undefined : measureRow(panes), id), id));
+    };
     return () => {
       opener = undefined;
     };
@@ -123,6 +133,8 @@ export function PaneStrip({ children }: { children: ReactNode }) {
         narrow,
         showing: showingPane(panes),
         lead: parseDoc(json).lead ?? 0,
+        added: parseDoc(json).added ?? [],
+        current: parseDoc(json).current,
         pins: parseDoc(json).pins ?? {},
         register,
         updateSpec,
@@ -134,7 +146,7 @@ export function PaneStrip({ children }: { children: ReactNode }) {
   );
 }
 
-/** Shows a pane (expanded and on the page) from anywhere, a link outside the frame included. */
+/** Shows a view's pane (expanded and on the page; the rightmost when it has several) from anywhere, a link outside the frame included. */
 export const showPane = (id: string) =>
   opener ? opener(id) : remember(paneDocKey, JSON.stringify(paneActions.show(parseDoc(localStorage.getItem(paneDocKey)), id)));
 
@@ -144,7 +156,7 @@ let opener: ((id: string) => void) | undefined;
 
 /** The panes on the page and what can be done to them; for the panes themselves, the View menu and the phone's row. */
 export function usePanes() {
-  const { panes, narrow, showing, lead, update } = useContext(StripContext);
+  const { panes, narrow, showing, lead, added, current, update } = useContext(StripContext);
   const ids = panes.map((p) => p.id);
   // measured when acted on, never while rendering; on a phone the widths
   // are the screen's and aren't kept
@@ -160,7 +172,15 @@ export function usePanes() {
     narrow,
     showing,
     lead,
+    added,
+    current,
     setHidden: (id: string, hidden: boolean) => update((d) => paneActions.setHidden(d, id, hidden)),
+    /** Another pane of a view, open, after the pane given or at the end of the row. */
+    addPane: (view: string, after?: string) => update((d) => paneActions.add(d, ids, view, after)),
+    /** The pane showing another view instead, in its place (see paneActions.switchView). */
+    switchView: (id: string, view: string) => update((d) => paneActions.switchView(d, ids, id, view)),
+    removePane: (id: string) => update((d) => paneActions.remove(d, id)),
+    setCurrent: (id: string) => update((d) => paneActions.setCurrent(d, id)),
     /** Opening makes room as a drag would (see openWithRoom); closing only shifts the others. */
     setCollapsed: (id: string, collapsed: boolean) => {
       if (collapsed || narrow) return update((d) => paneActions.setCollapsed(frozen(d), id, collapsed));

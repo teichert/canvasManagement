@@ -4,8 +4,8 @@ import { useMatches } from "@tanstack/react-router";
 import { Pane } from "@/components/panes/Pane";
 import { EndBar } from "@/components/panes/EndBar";
 import { PaneStrip, usePanes, usePinned } from "@/components/panes/PaneStrip";
-import { PanesMenu } from "@/components/panes/PanesMenu";
 import { PaneSelect } from "@/components/panes/PaneSelect";
+import { viewOf } from "@/components/panes/paneStore";
 import { FoldedBars, PinButton, topPin } from "@/components/panes/PinnedBars";
 import { BreadCrumbs } from "@/components/BreadCrumbs";
 import { useCourseContext } from "../context/courseContext";
@@ -41,11 +41,20 @@ export function CourseFrame({ children }: { children: ReactNode }) {
     return lectureDay ? { kind: "lecture", lectureDay } : undefined;
   }, [urlItem, onCoursePage, settings]);
   const [topPinned] = usePinned(topPin);
+  const { added } = usePanes();
+  // the catalogue's pane of each view, then the copies added (see paneActions.add), each with its view's spec and a numbered label
+  const panes = [
+    ...coursePanes,
+    ...added.flatMap((id) => {
+      const view = coursePanes.find((p) => p.id === viewOf(id));
+      return view ? [{ ...view, id, label: `${view.label} ${id.split("#")[1]}` }] : [];
+    }),
+  ];
   const popOut = usePopOutPane();
   // the same object while nothing changed, so memoized pane contents are skipped
   const ctx: PaneContext = useMemo(() => ({ courseName, item, onCoursePage }), [courseName, item, onCoursePage]);
   if (popOut) {
-    const pane = coursePanes.find((p) => p.id === popOut);
+    const pane = coursePanes.find((p) => p.id === viewOf(popOut));
     return (
       <>
         <FollowNavigation />
@@ -78,9 +87,6 @@ export function CourseFrame({ children }: { children: ReactNode }) {
           }
         >
           <PinButton pin={topPin} label="the breadcrumbs and view row" className="md:hidden" />
-          <span className="hidden md:contents">
-            <PanesMenu />
-          </span>
           <BreadCrumbs term={settings?.startDate ? getTermName(settings.startDate) : undefined} />
           <TopBar onCoursePage={onCoursePage} />
         </div>
@@ -88,13 +94,13 @@ export function CourseFrame({ children }: { children: ReactNode }) {
         {/* narrow: one grid cell every pane shares, the selected one visible */}
         <div className="min-h-0 flex-1 md:flex md:flex-row md:gap-0.5 max-md:grid">
           <LeadSpacer />
-          {coursePanes.map(({ Content, ...pane }) => (
+          {panes.map(({ Content, ...pane }) => (
             // the server renders what the first screen shows: the course page's calendar
             <Pane key={pane.id} {...pane} ssr={pane.id === "calendar" && onCoursePage}>
               <Content {...ctx} />
             </Pane>
           ))}
-          <EndBar />
+          <EndBar views={coursePanes.map(({ id, label, icon }) => ({ id, label, icon }))} />
         </div>
         <BottomBar />
       </div>

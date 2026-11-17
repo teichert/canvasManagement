@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fitOpening, leadId, limitsAfter, maxRuleShare, moveEdge, withLead, movePane, paneActions, PaneSpec, parseDoc, relax, shareRow, showingPane, viewPanes, widthRule } from "./paneStore";
+import { fitOpening, leadId, limitsAfter, maxRuleShare, moveEdge, withLead, movePane, paneActions, PaneSpec, parseDoc, relax, shareRow, showingPane, viewOf, viewPanes, widthRule } from "./paneStore";
 
 const spec = (id: string, extra: Partial<PaneSpec> = {}): PaneSpec => ({
   id,
@@ -184,5 +184,39 @@ describe("the row's left end", () => {
   });
   it("the lead is remembered apart from the panes", () => {
     expect(paneActions.setWidths({}, { [leadId]: 40.4, a: 300 })).toEqual({ lead: 40, panes: { a: { width: 300 } } });
+  });
+});
+
+describe("panes added beyond the catalogue", () => {
+  const ids = ["calendar", "editor", "editor#2"];
+  it("adds a view's next free copy, open, at the end, and makes it current", () => {
+    const doc = paneActions.add({ panes: { editor: { collapsed: true } } }, ids, "editor");
+    expect(doc.added).toEqual(["editor#3"]);
+    expect(doc.current).toBe("editor#3");
+    expect(doc.panes?.["editor#3"]).toEqual({ collapsed: false });
+    expect(viewOf("editor#3")).toBe("editor");
+    expect(viewOf("editor")).toBe("editor");
+  });
+  it("removes a copy with everything remembered about it", () => {
+    const doc = paneActions.remove({ added: ["editor#2"], order: ["editor#2", "calendar"], current: "editor#2", panes: { "editor#2": { width: 300 } } }, "editor#2");
+    expect(doc).toEqual({ added: [], order: ["calendar"], current: undefined, panes: {} });
+  });
+});
+
+describe("a pane switched to another view", () => {
+  const ids = ["calendar", "editor"];
+  it("takes the pane's place, width and limits; a catalogue pane is hidden, a copy removed", () => {
+    const doc = paneActions.switchView({ panes: { calendar: { width: 500, max: 600 } } }, ids, "calendar", "editor");
+    expect(doc.order).toEqual(["editor#2", "editor"]);
+    expect(doc.panes?.["editor#2"]).toEqual({ width: 500, max: 600 });
+    expect(doc.panes?.calendar).toEqual({ width: 500, max: 600, hidden: true });
+    expect(doc.current).toBe("editor#2");
+    const again = paneActions.switchView(doc, ["editor#2", "editor"], "editor#2", "preview");
+    expect(again.order).toEqual(["preview#2", "editor"]);
+    expect(again.added).toEqual(["preview#2"]);
+    expect(again.panes?.["editor#2"]).toBeUndefined();
+  });
+  it("adds after a pane when asked", () => {
+    expect(paneActions.add({}, ids, "editor", "calendar").order).toEqual(["calendar", "editor#2", "editor"]);
   });
 });

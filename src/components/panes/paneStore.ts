@@ -14,6 +14,10 @@ export type PaneDoc = {
   pins?: Record<string, boolean>;
   /** `min` and `max` are limits a drag from a resize square pushed (see limitsAfter); without them, the pane's own minimum and no maximum. */
   panes?: Record<string, { hidden?: boolean; collapsed?: boolean; width?: number; min?: number; max?: number }>;
+  /** Panes added beyond the catalogue's one per view: a view's second and later copies, ids like `editor#2` (see viewOf). */
+  added?: string[];
+  /** The pane the view row marks on a wide window: the last one switched to, added or shown by a link. */
+  current?: string;
 };
 export const paneDocKey = "panes";
 
@@ -79,6 +83,16 @@ export function viewPanes(specs: PaneSpec[], doc: PaneDoc, hydrated: boolean): P
 }
 
 export const isShown = (pane: PaneView) => !pane.hidden && !pane.collapsed;
+
+/** The view a pane shows: its id up to the `#` that numbers a copy (`editor#2` shows the editor). */
+export const viewOf = (id: string) => id.split("#")[0];
+
+/** The lowest-numbered id of `view` not among `ids`. */
+const freeId = (ids: string[], view: string) => {
+  let n = 2;
+  while (ids.includes(`${view}#${n}`)) n++;
+  return `${view}#${n}`;
+};
 
 /** On a narrow window, the pane that shows: the first open one, else the first on the page at all. */
 export const showingPane = (panes: PaneView[]) => (panes.find(isShown) ?? panes.find((p) => !p.hidden))?.id;
@@ -282,6 +296,31 @@ export const paneActions = {
     ),
   move: (doc: PaneDoc, ids: string[], id: string, index: number) => ({ ...doc, order: movePane(ids, id, index) }),
   setPinned: (doc: PaneDoc, key: string, pinned: boolean) => ({ ...doc, pins: { ...doc.pins, [key]: pinned } }),
+  /** Another pane of `view` (its lowest free number), open and current, after the pane `after` or at the end of the row. */
+  add: (doc: PaneDoc, ids: string[], view: string, after?: string): PaneDoc => {
+    const id = freeId(ids, view);
+    const at = after === undefined ? -1 : ids.indexOf(after);
+    const order = at === -1 ? undefined : [...ids.slice(0, at + 1), id, ...ids.slice(at + 1)];
+    return { ...withPane(doc, id, { collapsed: false }), ...(order && { order }), added: [...(doc.added ?? []), id], current: id };
+  },
+  /**
+   * The pane `id` showing `view` instead: a new pane of that view takes its
+   * place, width, limits and state; the old one goes (a catalogue pane is
+   * hidden, since the View menu lists it; a copy is removed).
+   */
+  switchView: (doc: PaneDoc, ids: string[], id: string, view: string): PaneDoc => {
+    if (viewOf(id) === view) return doc;
+    const next = freeId(ids, view);
+    const { hidden: _hidden, ...state } = doc.panes?.[id] ?? {};
+    const moved = withPane({ ...doc, order: ids.map((x) => (x === id ? next : x)), added: [...(doc.added ?? []), next], current: next }, next, state);
+    return id.includes("#") ? paneActions.remove({ ...moved, order: moved.order }, id) : withPane(moved, id, { hidden: true });
+  },
+  /** An added pane taken away for good (a catalogue pane is only hidden). */
+  remove: (doc: PaneDoc, id: string): PaneDoc => {
+    const { [id]: _gone, ...panes } = doc.panes ?? {};
+    return { ...doc, panes, added: (doc.added ?? []).filter((x) => x !== id), order: doc.order?.filter((x) => x !== id), current: doc.current === id ? undefined : doc.current };
+  },
+  setCurrent: (doc: PaneDoc, id: string): PaneDoc => ({ ...doc, current: id }),
   /** Back to how the app starts. */
   reset: (): PaneDoc => ({}),
 };

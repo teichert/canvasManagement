@@ -4,7 +4,7 @@ import { usePaneRegistration, usePanes } from "./PaneStrip";
 import { MinRule } from "./PaneRules";
 import { HideButton, PaneBar, Side } from "./PaneBar";
 import { useRouterState } from "@tanstack/react-router";
-import { isShown } from "./paneStore";
+import { isShown, viewOf } from "./paneStore";
 import { applyWidth, useEdgeDrag } from "./useEdgeDrag";
 import { paneElement } from "./measureRow";
 import { openPopOut } from "@/app/course/[courseName]/panes/popOut";
@@ -56,17 +56,22 @@ export function Pane({
   children: ReactNode;
 }) {
   usePaneRegistration({ id, label, icon, minWidth, defaultWidth, collapsedByDefault, ssr });
-  const { panes, narrow, showing, setCollapsed, setHidden, setLimits, jumpTo, move } = usePanes();
+  const { panes, narrow, showing, setCollapsed, setHidden, removePane, setCurrent, setLimits, jumpTo, move } = usePanes();
   const { dragEdge, endDrag } = useEdgeDrag();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const popOutHref = { pathname, pane: id };
+  const popOutHref = { pathname, pane: viewOf(id) };
   const place = panes.findIndex((p) => p.id === id);
   const view = panes[place];
   const remembered = view?.collapsed ?? !ssr;
   const selected = narrow && showing === id;
   const collapsed = narrow ? !selected : remembered;
-  const toggle = () => setCollapsed(id, !remembered);
-  const hide = () => setHidden(id, true);
+  // the bar and the title make the pane current: what the end bar's view icons act on
+  const toggle = () => {
+    setCollapsed(id, !remembered);
+    setCurrent(id);
+  };
+  // a catalogue pane is hidden (the View menu brings it back); an added copy is taken away
+  const hide = () => (id.includes("#") ? removePane(id) : setHidden(id, true));
   /** The pane dropped outside the window: off the page and into a window of its own. */
   const dropped = (e: React.PointerEvent) => {
     if (e.clientX < 0 || e.clientY < 0 || e.clientX > window.innerWidth || e.clientY > window.innerHeight) {
@@ -154,7 +159,8 @@ export function Pane({
           <div className="max-md:hidden flex-none flex flex-row items-center gap-2 border-b border-slate-800 text-xs font-semibold text-slate-300">
             <button
               className="unstyled flex-1 min-w-0 truncate text-left !px-1 !py-1 hover:text-white"
-              title={`Double-click to focus ${label} (it open, the rest collapsed)`}
+              title={`Click: make ${label} the current pane. Double-click: focus it (it open, the rest collapsed)`}
+              onClick={() => setCurrent(id)}
               onDoubleClick={() => jumpTo(id)}
             >
               {label}

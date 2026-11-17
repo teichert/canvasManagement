@@ -28,9 +28,9 @@ export function instanceId(): string {
 /** The url that opens `pane` in its own window for what `pathname` shows (untied; a bookmark). */
 export const popOutUrl = (pathname: string, pane: string) => `${pathname}?pane=${pane}`;
 
-/** Opens `pane` in its own window, tied to this instance; the same pane again reuses that window. */
-export const openPopOut = (pathname: string, pane: string) => {
-  window.open(popOutUrl(pathname, pane), `${namePrefix}${instanceId()}:${pane}`);
+/** Opens `pane` in its own tab (or window), tied to this instance; the same pane again reuses it. */
+export const openPopOut = (pathname: string, pane: string, newWindow = false) => {
+  window.open(popOutUrl(pathname, pane), `${namePrefix}${instanceId()}:${pane}`, newWindow ? "popup" : undefined);
 };
 
 /** The instance this pop-out follows, if it was opened from one. */
