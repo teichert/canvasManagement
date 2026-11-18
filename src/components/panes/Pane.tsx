@@ -3,7 +3,8 @@ import { CSSProperties, ReactNode, RefObject, useLayoutEffect, useRef, useState 
 import { createPortal } from "react-dom";
 import { usePaneRegistration, usePanes } from "./PaneStrip";
 import { MinRule } from "./PaneRules";
-import { HideButton, OnView, PaneBar, Side, useDragHandlers, ViewChoice } from "./PaneBar";
+import { HideButton, PaneBar, Side, useDragHandlers } from "./PaneBar";
+import { OnView, ViewChoice } from "./ViewIcons";
 import { PopOutLink } from "./PopOutLink";
 import { useRouterState } from "@tanstack/react-router";
 import { isShown, viewOf } from "./paneStore";
@@ -61,7 +62,7 @@ export function Pane({
   children: ReactNode;
 }) {
   usePaneRegistration({ id, label, icon, minWidth, defaultWidth, collapsedByDefault, ssr });
-  const { panes, narrow, showing, flashing, setCollapsed, close, setHidden, removePane, addPane, switchView, setLimits, setWidths, jumpTo, move } = usePanes();
+  const { panes, narrow, showing, flashing, setCollapsed, close, addPane, switchView, setLimits, setWidths, jumpTo, move } = usePanes();
   const { dragEdge, endDrag } = useEdgeDrag();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const popOutHref = { pathname, pane: viewOf(id) };
@@ -74,11 +75,10 @@ export function Pane({
   /** A view icon on this pane's bar: the pane shows that view; Ctrl: a new pane of it after this one; Ctrl+Shift: at the end; Shift: a new window following this one. */
   const onView: OnView = (view, e) => {
     if (e.shiftKey && !e.ctrlKey && !e.metaKey) return openPopOut(pathname, view, true);
-    if (e.ctrlKey || e.metaKey) return addPane(view, e.shiftKey ? undefined : id);
+    if (e.ctrlKey || e.metaKey) return addPane(view, e.shiftKey ? undefined : place + 1);
     switchView(id, view);
   };
-  // a catalogue pane is hidden (the frame always renders it); an added copy is taken away
-  const hide = () => (id.includes("#") ? removePane(id) : setHidden(id, true));
+  const hide = () => close([id]);
   // a drag of the pane (its name, its menu icon or its title): the pane leaves the row for
   // the drag, a marker shows where it would land, a label by the pointer says what a drop
   // does; outside the window, the pane goes into a window of its own

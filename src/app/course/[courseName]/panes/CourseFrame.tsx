@@ -1,11 +1,10 @@
 "use client";
 import { ReactNode, useMemo } from "react";
 import { useMatches, useRouter, useRouterState } from "@tanstack/react-router";
-import { ViewIcons } from "@/components/panes/PaneBar";
+import { ViewIcons } from "@/components/panes/ViewIcons";
 import { openPopOut, popOutUrl } from "./popOut";
 import { Pane } from "@/components/panes/Pane";
-import { EndBar } from "@/components/panes/EndBar";
-import { StartBar } from "@/components/panes/StartBar";
+import { EdgeBar } from "@/components/panes/EdgeBar";
 import { PaneStrip, usePanes, usePinned } from "@/components/panes/PaneStrip";
 import { PaneSelect } from "@/components/panes/PaneSelect";
 import { viewOf } from "@/components/panes/paneStore";
@@ -114,7 +113,7 @@ export function CourseFrame({ children }: { children: ReactNode }) {
         <PaneSelect views={views} />
         {/* narrow: one grid cell every pane shares, the selected one visible */}
         <div className="min-h-0 flex-1 md:flex md:flex-row md:gap-0.5 max-md:grid">
-          <StartBar views={views} />
+          <EdgeBar end="start" views={views} />
           <LeadSpacer />
           {panes.map(({ Content, ...pane }) => (
             // the server renders what the first screen shows: the course page's calendar
@@ -122,7 +121,7 @@ export function CourseFrame({ children }: { children: ReactNode }) {
               <Content {...ctx} />
             </Pane>
           ))}
-          <EndBar views={views} />
+          <EdgeBar end="end" views={views} />
         </div>
         <BottomBar />
       </div>

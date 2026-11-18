@@ -28,7 +28,7 @@ export function measureRow(panes: PaneView[]): Row {
   const box = row.getBoundingClientRect();
   // the start and end bars sit outside every pane: the empty room is what's
   // left before the end bar, and the room the panes share leaves both out
-  const edgeBars = [...row.querySelectorAll<HTMLElement>("[data-pane-end], [data-pane-start]")];
+  const edgeBars = [...row.querySelectorAll<HTMLElement>("[data-pane-edge]")];
   const end = Math.max(...[...row.children].filter((el) => !edgeBars.includes(el as HTMLElement)).map((el) => el.getBoundingClientRect().right));
   const endBarWidth = edgeBars.reduce((total, el) => total + el.getBoundingClientRect().width + gapOf(row), 0);
   const collapsed = shown.find((p) => p.collapsed);

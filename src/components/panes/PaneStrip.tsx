@@ -144,9 +144,16 @@ export function PaneStrip({
   );
   // links (showPane) open the first pane of the view on the page the way the bar
   // does, room made, on the panes as they are now; with none on the page, a new
-  // pane of the view at the end of the row
-  useEffect(() => {
+  // pane of the view at the end of the row. A layout effect: set before any
+  // child's effect runs (a page url that shows a pane does so as it mounts)
+  useLayoutEffect(() => {
     opener = onShowPane ?? ((view) => {
+      // before the panes have registered (a page url that shows a pane, as the page loads), the document says what is on the page
+      if (!panes.length) {
+        const doc = parseDoc(readPaneDoc());
+        const ids = [...Object.keys(doc.panes ?? {}), ...(doc.added ?? []), view];
+        return update((d) => (doc.panes?.[view]?.hidden ? paneActions.add(d, ids, view) : paneActions.show(d, view)));
+      }
       const pane = panes.find((p) => viewOf(p.id) === view && !p.hidden);
       if (!pane) return update((d) => paneActions.add(d, panes.map((p) => p.id), view));
       update((d) => openWithRoom(d, panes, narrow ? undefined : measureRow(panes), pane.id));
@@ -180,17 +187,10 @@ export function PaneStrip({
   );
 }
 
-/** Shows a view's pane (the first on the page, expanded; a new one at the end when there is none) from anywhere, a link outside the frame included. */
-export const showPane = (id: string) => {
-  if (opener) return opener(id);
-  // no strip yet (the page is loading): the document alone says whether the view's pane is on the page
-  const doc = parseDoc(readPaneDoc());
-  const ids = [...new Set([...Object.keys(doc.panes ?? {}), ...(doc.added ?? []), id])];
-  writePaneDoc(JSON.stringify(doc.panes?.[id]?.hidden ? paneActions.add(doc, ids, id) : paneActions.show(doc, id)));
-};
+/** Shows a view's pane (the first on the page, expanded; a new one at the end when there is none) from anywhere on a page with a strip. */
+export const showPane = (id: string) => opener?.(id);
 
-// the strip on the page, if any, opens a pane with room made (see
-// openWithRoom); a link outside a course's frame just writes the document
+// the strip on the page, if any, opens a pane with room made (see openWithRoom)
 let opener: ((id: string) => void) | undefined;
 
 /** The panes on the page and what can be done to them; for the panes themselves and the phone's row. */
@@ -214,35 +214,30 @@ export function usePanes() {
     added,
     flashing,
     flash,
-    setHidden: (id: string, hidden: boolean) => update((d) => paneActions.setHidden(d, id, hidden)),
-    /** Another pane of a view, open, after the pane given or at the end of the row. */
-    addPane: (view: string, after?: string) => update((d) => paneActions.add(d, ids, view, after === undefined ? undefined : ids.indexOf(after) + 1)),
-    /** Another pane of a view, open, at the start of the row. */
-    addPaneFirst: (view: string) => update((d) => paneActions.add(d, ids, view, 0)),
+    /** Another pane of a view, open, at `index` in the row (none: at the end). */
+    addPane: (view: string, index?: number) => update((d) => paneActions.add(d, ids, view, index)),
     /**
-     * A view asked for from an edge bar: its first open pane is shown where it
-     * is (outlined for a moment); with none open, its first pane is expanded
-     * and outlined; with none on the page, a new one at that end of the row.
+     * A view asked for by its icon: its first open pane is shown where it is
+     * (outlined for a moment); with none open, its first pane is expanded and
+     * outlined; with none on the page, a new one at that end of the row. On a
+     * phone the pane is the one showing (see jumpTo).
      */
     showView: (view: string, end: "start" | "end") => {
       const existing = panes.filter((p) => viewOf(p.id) === view && !p.hidden);
-      if (!existing.length) {
-        const id = freeId(ids, view);
-        update((d) => paneActions.add(d, ids, view, end === "start" ? 0 : undefined));
-        return flash(id);
-      }
       const pane = existing.find(isShown) ?? existing[0];
-      if (!isShown(pane)) {
+      const id = pane?.id ?? freeId(ids, view);
+      const added = (d: PaneDoc) => (pane ? d : paneActions.add(d, ids, view, end === "start" ? 0 : undefined));
+      if (narrow) update((d) => paneActions.jumpTo(added(d), [...ids, id], id));
+      else if (!pane || !isShown(pane)) {
         const r = row();
-        update((d) => openWithRoom(d, panes, r, pane.id));
+        update((d) => (pane ? openWithRoom(d, panes, r, id) : added(d)));
       }
-      flash(pane.id);
+      flash(id);
     },
     /** These panes closed as × closes them (see paneActions.close). */
     close: (which: string[]) => update((d) => paneActions.close(frozen(d), which)),
     /** The pane showing another view instead, in its place (see paneActions.switchView). */
     switchView: (id: string, view: string) => update((d) => paneActions.switchView(d, ids, id, view)),
-    removePane: (id: string) => update((d) => paneActions.remove(d, id)),
     /** Opening makes room as a drag would (see openWithRoom); closing only shifts the others. */
     setCollapsed: (id: string, collapsed: boolean) => {
       if (collapsed || narrow) return update((d) => paneActions.setCollapsed(frozen(d), id, collapsed));
@@ -253,15 +248,6 @@ export function usePanes() {
     setLimits: (id: string, limits: { min?: number; max?: number }) => update((d) => paneActions.setLimits(d, id, limits)),
     /** This pane open, the rest collapsed: on a phone, the one showing. */
     jumpTo: (id: string) => update((d) => paneActions.jumpTo(frozen(d), ids, id)),
-    /** On a phone: the first pane of the view showing, added at the end when there is none. */
-    jumpToView: (view: string) => {
-      const pane = panes.find((p) => viewOf(p.id) === view && !p.hidden);
-      if (pane) return update((d) => paneActions.jumpTo(d, ids, pane.id));
-      update((d) => {
-        const id = freeId(ids, view);
-        return paneActions.jumpTo(paneActions.add(d, ids, view), [...ids, id], id);
-      });
-    },
     /** Widths from the sizing rules, and the limits a drag from a resize square moved (see limitsAfter). */
     setWidths: (widths: Record<string, number>, moved?: { id: string; min?: number; max?: number }) =>
       update((d) => {

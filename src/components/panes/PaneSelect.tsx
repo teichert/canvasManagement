@@ -1,7 +1,7 @@
 "use client";
 import { usePanes, usePinned } from "./PaneStrip";
 import { topPin } from "./PinnedBars";
-import { ViewChoice } from "./PaneBar";
+import { ViewChoice } from "./ViewIcons";
 import { viewOf } from "./paneStore";
 
 /**
@@ -11,7 +11,7 @@ import { viewOf } from "./paneStore";
  * collapsed), added at the end when there is none.
  */
 export function PaneSelect({ views }: { views: ViewChoice[] }) {
-  const { showing, jumpToView } = usePanes();
+  const { showing, showView } = usePanes();
   const current = showing && viewOf(showing);
   const [pinned] = usePinned(topPin);
   return (
@@ -28,7 +28,7 @@ export function PaneSelect({ views }: { views: ViewChoice[] }) {
             aria-label={v.label}
             aria-pressed={v.id === current}
             title={v.label}
-            onClick={() => jumpToView(v.id)}
+            onClick={() => showView(v.id, "end")}
           >
             {v.icon}
           </button>
