@@ -2,9 +2,11 @@
 import { ReactNode, useRef, useState } from "react";
 import { PanesIcon, PopOutIcon } from "../icons/ActionIcons";
 import { useDragHandlers } from "./PaneBar";
+import { usePanes } from "./PaneStrip";
 
-/** A view a pane can show, as the bars offer it. */
-export type ViewChoice = { id: string; label: string; icon: ReactNode };
+/** A view a pane can show, as the bars offer it; `hidden`: listed below the menus' divider, off the icon stacks. */
+export type ViewChoice = { id: string; label: string; icon: ReactNode; hidden?: boolean };
+const divider = "__divider";
 /** A view icon clicked: which view, and the click (its modifiers say what to do with it). */
 export type OnView = (view: string, e: React.MouseEvent) => void;
 
@@ -14,7 +16,10 @@ export type OnView = (view: string, e: React.MouseEvent) => void;
  * view's pop-out url (the middle button opens it in a tab, tied to
  * nothing); any other click goes to `onView`. The view this bar's pane
  * shows, if any, is marked. The menu icon dragged is the bar dragged
- * (`drag`), and the menu can end in more actions (`extras`).
+ * (`drag`), and the menu can end in more actions (`extras`). The menu's
+ * rows are dragged by their handles into another order, or below the
+ * divider, which takes a view off the icon stacks (the divider itself
+ * drags too); that is remembered with the layout and changes no pane.
  */
 export function ViewIcons({
   views,
@@ -47,6 +52,49 @@ export function ViewIcons({
 }) {
   const [menuAt, setMenuAt] = useState<{ top: number; left?: number; right?: number } | null>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
+  const { setViews } = usePanes();
+  // the menu's rows in order, the divider among them; a drag moves one row on release
+  // (reordering mid-drag would move the handle in the DOM and drop the pointer capture)
+  const rows = [...views.filter((v) => !v.hidden).map((v) => v.id), divider, ...views.filter((v) => v.hidden).map((v) => v.id)];
+  const dragging = useRef<string | null>(null);
+  const [dropAt, setDropAt] = useState<{ id: string; after: boolean } | null>(null);
+  const handle = (id: string) => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      dragging.current = id;
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      if (dragging.current !== id) return;
+      const over = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-view-row]");
+      const overId = over?.dataset.viewRow;
+      if (!over || !overId || overId === id) return setDropAt(null);
+      const box = over.getBoundingClientRect();
+      setDropAt({ id: overId, after: e.clientY > box.top + box.height / 2 });
+    },
+    onPointerUp: (e: React.PointerEvent) => {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+      if (dropAt) {
+        const rest = rows.filter((r) => r !== id);
+        const at = rest.indexOf(dropAt.id) + (dropAt.after ? 1 : 0);
+        const next = [...rest.slice(0, at), id, ...rest.slice(at)];
+        const cut = next.indexOf(divider);
+        setViews(next.filter((r) => r !== divider), next.slice(cut + 1));
+      }
+      dragging.current = null;
+      setDropAt(null);
+    },
+  });
+  const rowClass = (id: string) =>
+    "flex items-center gap-1 rounded border-y-2 " +
+    (dropAt?.id === id && !dropAt.after ? "border-t-blue-500 " : "border-t-transparent ") +
+    (dropAt?.id === id && dropAt.after ? "border-b-blue-500" : "border-b-transparent");
+  const grip = (id: string, label: string) => (
+    <span className="w-4 cursor-grab select-none touch-none text-center text-slate-600 hover:text-slate-200" title={`Drag to move ${label} in the list; below the divider, it leaves the icons`} aria-label={`Move ${label}`} {...handle(id)}>
+      ⋮⋮
+    </span>
+  );
   const toggleMenu = () => {
     const r = menuButton.current?.getBoundingClientRect();
     if (!r) return;
@@ -85,8 +133,20 @@ export function ViewIcons({
             style={menuAt}
             onPointerDown={(e) => e.stopPropagation()}
           >
-            {views.map((v) => (
-              <div key={v.id} className="flex items-center gap-1">
+            {rows.map((id) => {
+              const v = views.find((x) => x.id === id);
+              if (!v)
+                return (
+                  <div key={divider} data-view-row={divider} className={rowClass(divider) + " text-[10px] uppercase tracking-wider text-slate-600"}>
+                    {grip(divider, "the divider")}
+                    <span className="flex-1 border-t border-slate-700" />
+                    <span className="px-1" title="Views below are listed here but kept off the icons">hidden below</span>
+                    <span className="flex-1 border-t border-slate-700" />
+                  </div>
+                );
+              return (
+              <div key={v.id} data-view-row={v.id} className={rowClass(v.id)}>
+                {grip(v.id, v.label)}
                 <a
                   role="menuitem"
                   href={hrefOf(v.id)}
@@ -112,7 +172,8 @@ export function ViewIcons({
                   <PopOutIcon />
                 </a>
               </div>
-            ))}
+              );
+            })}
             {extras.map((extra, i) => (
               <button
                 key={extra.label}
@@ -131,7 +192,7 @@ export function ViewIcons({
         </>
       )}
       {stack &&
-        views.map((v) =>
+        views.filter((v) => !v.hidden).map((v) =>
           v.id === current ? (
           <span key={v.id} className={icon + "text-blue-300"} title={`${v.label}, this pane's view`}>
             {v.icon}

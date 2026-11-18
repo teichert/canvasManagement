@@ -69,6 +69,8 @@ type Strip = {
   lead: number;
   /** Panes beyond the catalogue's: a view's second and later copies (see paneActions.add). */
   added: string[];
+  /** The views' order and which are kept below the menus' divider (see paneActions.setViews). */
+  views: NonNullable<PaneDoc["views"]>;
   /** The pane briefly outlined, to show where it is (see usePanes().flash). */
   flashing?: string;
   flash: (id: string) => void;
@@ -82,6 +84,7 @@ const StripContext = createContext<Strip>({
   panes: [],
   lead: 0,
   added: [],
+  views: {},
   narrow: false,
   flash: () => {},
   pins: {},
@@ -174,6 +177,7 @@ export function PaneStrip({
         showing: showingPane(panes),
         lead: parseDoc(json).lead ?? 0,
         added: parseDoc(json).added ?? [],
+        views: parseDoc(json).views ?? {},
         flashing,
         flash,
         pins: parseDoc(json).pins ?? {},
@@ -195,7 +199,7 @@ let opener: ((id: string) => void) | undefined;
 
 /** The panes on the page and what can be done to them; for the panes themselves and the phone's row. */
 export function usePanes() {
-  const { panes, narrow, showing, lead, added, flashing, flash, update } = useContext(StripContext);
+  const { panes, narrow, showing, lead, added, views, flashing, flash, update } = useContext(StripContext);
   const ids = panes.map((p) => p.id);
   // measured when acted on, never while rendering; on a phone the widths
   // are the screen's and aren't kept
@@ -212,8 +216,11 @@ export function usePanes() {
     showing,
     lead,
     added,
+    views,
     flashing,
     flash,
+    /** The views' order in the menus, and which are kept below the divider, off the icon stacks. */
+    setViews: (order: string[], hidden: string[]) => update((d) => paneActions.setViews(d, order, hidden)),
     /** Another pane of a view, open, at `index` in the row (none: at the end). */
     addPane: (view: string, index?: number) => update((d) => paneActions.add(d, ids, view, index)),
     /**
@@ -247,7 +254,18 @@ export function usePanes() {
       const now = r?.open.find((p) => p.id === id);
       if (!r || !pane || !now) return;
       const target = Math.min(pane.maxWidth, r.room);
-      if (now.width >= target - 1) {
+      const { widths, collapse, short } = fitOpening(r.open, id, target - now.width, r.free, r.bar);
+      const hide: string[] = [];
+      let left = short;
+      for (const p of [...panes].reverse()) {
+        if (left <= 0) break;
+        if (p.id === id || p.hidden) continue;
+        hide.push(p.id);
+        left -= r.bar;
+      }
+      const grown = target - Math.max(left, 0);
+      // growing would change nothing: it is as wide as it may be, so back to its narrowest instead
+      if (grown - now.width < 2) {
         const widths: Record<string, number> = { [id]: pane.minWidth };
         let freed = now.width - pane.minWidth;
         const reopen: string[] = [];
@@ -259,16 +277,7 @@ export function usePanes() {
         }
         return update((d) => reopen.reduce((x, c) => paneActions.setCollapsed(x, c, false), paneActions.setWidths(d, widths)));
       }
-      const { widths, collapse, short } = fitOpening(r.open, id, target - now.width, r.free, r.bar);
-      const hide: string[] = [];
-      let left = short;
-      for (const p of [...panes].reverse()) {
-        if (left <= 0) break;
-        if (p.id === id || p.hidden) continue;
-        hide.push(p.id);
-        left -= r.bar;
-      }
-      widths[id] = target - Math.max(left, 0);
+      widths[id] = grown;
       update((d) => paneActions.close(collapse.reduce((x, c) => paneActions.setCollapsed(x, c, true), paneActions.setWidths(d, widths)), hide));
     },
     /** These panes closed as × closes them (see paneActions.close). */

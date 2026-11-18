@@ -17,6 +17,8 @@ export type PaneDoc = {
   panes?: Record<string, { hidden?: boolean; collapsed?: boolean; width?: number; min?: number; max?: number }>;
   /** Panes added beyond the catalogue's one per view: a view's second and later copies, ids like `editor#2` (see viewOf). */
   added?: string[];
+  /** The views as the menus and icon stacks list them: their order, and those kept below the menus' divider, off the stacks. */
+  views?: { order?: string[]; hidden?: string[] };
 };
 export const paneDocKey = "panes";
 
@@ -253,6 +255,8 @@ export const paneActions = {
   close: (doc: PaneDoc, ids: string[]): PaneDoc =>
     ids.reduce((d, id) => (id.includes("#") ? paneActions.remove(d, id) : withPane(d, id, { hidden: true })), doc),
   setPinned: (doc: PaneDoc, key: string, pinned: boolean) => ({ ...doc, pins: { ...doc.pins, [key]: pinned } }),
+  /** The views' order in the menus, and which are kept below the divider. */
+  setViews: (doc: PaneDoc, order: string[], hidden: string[]): PaneDoc => ({ ...doc, views: { order, hidden } }),
   /** Another pane of `view` (its lowest free number), open, at `index` in the row (none: at the end). */
   add: (doc: PaneDoc, ids: string[], view: string, index?: number): PaneDoc => {
     const id = freeId(ids, view);

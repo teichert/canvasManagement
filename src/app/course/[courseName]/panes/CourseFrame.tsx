@@ -7,7 +7,7 @@ import { Pane } from "@/components/panes/Pane";
 import { EdgeBar } from "@/components/panes/EdgeBar";
 import { PaneStrip, usePanes, usePinned } from "@/components/panes/PaneStrip";
 import { PaneSelect } from "@/components/panes/PaneSelect";
-import { viewOf } from "@/components/panes/paneStore";
+import { orderPanes, viewOf } from "@/components/panes/paneStore";
 import { FoldedBars, PinButton, topPin } from "@/components/panes/PinnedBars";
 import { BreadCrumbs } from "@/components/BreadCrumbs";
 import { useCourseContext } from "../context/courseContext";
@@ -43,7 +43,7 @@ export function CourseFrame({ children }: { children: ReactNode }) {
     return lectureDay ? { kind: "lecture", lectureDay } : undefined;
   }, [urlItem, onCoursePage, settings]);
   const [topPinned] = usePinned(topPin);
-  const { added } = usePanes();
+  const { added, views: prefs } = usePanes();
   // the catalogue's pane of each view, then the copies added (see paneActions.add), each with its view's spec
   const panes = [
     ...coursePanes,
@@ -52,7 +52,11 @@ export function CourseFrame({ children }: { children: ReactNode }) {
       return view ? [{ ...view, id }] : [];
     }),
   ];
-  const views = coursePanes.map(({ id, label, icon }) => ({ id, label, icon }));
+  // as the menus list them: in the order chosen there, those below the divider off the icon stacks
+  const views = orderPanes(
+    coursePanes.map(({ id, label, icon }) => ({ id, label, icon, hidden: prefs.hidden?.includes(id) })),
+    prefs.order,
+  );
   const popOut = usePopOutPane();
   const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });

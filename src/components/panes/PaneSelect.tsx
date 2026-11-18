@@ -18,7 +18,7 @@ export function PaneSelect({ views }: { views: ViewChoice[] }) {
     <div className={"md:hidden flex-none flex flex-row items-center gap-1 py-0.5 " + (pinned ? "" : "hidden")}>
       {/* the icons scroll sideways on a small phone */}
       <div className="flex-1 min-w-0 flex flex-row items-center gap-1 overflow-x-auto">
-        {views.map((v) => (
+        {views.filter((v) => !v.hidden).map((v) => (
           <button
             key={v.id}
             className={
