@@ -50,7 +50,7 @@ export function useDragHandlers(onDrag: (e: React.PointerEvent, startX: number) 
  * on the bar's left, from the right half the nearest on its right (so a
  * collapsed pane's bar resizes its open neighbours). The drag gets its way,
  * and a limit of that pane it crosses moves with it, that pane's only;
- * double-clicking a half puts that pane's limits back to its own. A half
+ * double-clicking a half makes that pane's narrowest width its current width. A half
  * with no open pane on its side moves the edge as a drag of the bar does,
  * within every pane's limits. No part of the square drags the bar itself.
  */
@@ -64,7 +64,7 @@ export function ResizeSquare({
   sides: Partial<Record<Side, string>>;
   onDrag: (e: React.PointerEvent, startX: number, side: Side) => void;
   onDragEnd: () => void;
-  /** Double-click on a half: that side's pane back to its own width and limits. */
+  /** Double-click on a half: that side's pane's narrowest width becomes its current width. */
   onReset: (side: Side) => void;
 }) {
   return (
@@ -106,7 +106,7 @@ function Half({
       aria-label={label ? `Resize ${label}` : "Move this edge"}
       title={
         label
-          ? `Drag: move this edge, with ${label} giving or taking room past its narrowest or widest width if need be (they follow). Double-click: ${label} back to its own width and limits`
+          ? `Drag: move this edge, with ${label} giving or taking room past its narrowest or widest width if need be (they follow). Double-click: ${label} can't be made narrower than it is now`
           : "Drag: move this edge within the panes' limits"
       }
       className={"h-full touch-none hover:bg-slate-500 " + (side === "left" ? "cursor-w-resize" : "cursor-e-resize")}

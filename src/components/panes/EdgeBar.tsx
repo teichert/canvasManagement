@@ -5,6 +5,7 @@ import { useEdgeDrag } from "./useEdgeDrag";
 import { barClass, ResizeSquare, Side, useDragHandlers } from "./PaneBar";
 import { ViewChoice, ViewIcons } from "./ViewIcons";
 import { isShown } from "./paneStore";
+import { paneElement } from "./measureRow";
 import { openPopOut, popOutUrl } from "@/app/course/[courseName]/panes/popOut";
 
 /**
@@ -12,15 +13,15 @@ import { openPopOut, popOutUrl } from "@/app/course/[courseName]/panes/popOut";
  * left or right edge. Dragged, it moves the edge of the pane at that end
  * (into the empty room, or the room before the first pane, see withLead);
  * its resize square's inner half resizes that pane past its limits, the
- * outer half moves the edge as the bar does, a double-click puts the pane
- * back to its own width and limits. Under the square, the views (see
+ * outer half moves the edge as the bar does, a double-click makes the
+ * pane's narrowest width its current width. Under the square, the views (see
  * ViewIcons): a click shows the view's first open pane where it is, or
  * expands its first pane, or opens a new one at this end of the row when
  * there is none (Ctrl-click: a new one regardless); Shift-click opens the
  * view in a new window following this one.
  */
 export function EdgeBar({ end, views }: { end: "start" | "end"; views: ViewChoice[] }) {
-  const { panes, narrow, setLimits, setWidths, addPane, showView, close } = usePanes();
+  const { panes, narrow, setLimits, addPane, showView, close } = usePanes();
   const { dragEdge, endDrag } = useEdgeDrag();
   const at = end === "start" ? 0 : panes.length;
   const handlers = useDragHandlers((e, x) => dragEdge(at, e.clientX - x), endDrag);
@@ -47,10 +48,7 @@ export function EdgeBar({ end, views }: { end: "start" | "end"; views: ViewChoic
           sides={{ [inner]: pane.label }}
           onDrag={(e, x, side) => dragEdge(at, e.clientX - x, side === inner ? pane.id : undefined)}
           onDragEnd={endDrag}
-          onReset={() => {
-            setLimits(pane.id, { min: undefined, max: undefined });
-            setWidths({ [pane.id]: pane.defaultWidth });
-          }}
+          onReset={() => setLimits(pane.id, { min: Math.round(paneElement(pane.id)?.getBoundingClientRect().width ?? pane.width) })}
         />
       )}
       <ViewIcons

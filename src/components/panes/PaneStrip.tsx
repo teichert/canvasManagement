@@ -234,6 +234,29 @@ export function usePanes() {
       }
       flash(id);
     },
+    /**
+     * The pane as wide as its widest width (the row, with none) allows: the
+     * others narrow to their narrowest, then collapse, then close, from the
+     * right (see fitOpening), as far as needed.
+     */
+    grow: (id: string) => {
+      const r = row();
+      const pane = panes.find((p) => p.id === id);
+      const now = r?.open.find((p) => p.id === id);
+      if (!r || !pane || !now) return;
+      const target = Math.min(pane.maxWidth, r.room);
+      const { widths, collapse, short } = fitOpening(r.open, id, target - now.width, r.free, r.bar);
+      const hide: string[] = [];
+      let left = short;
+      for (const p of [...panes].reverse()) {
+        if (left <= 0) break;
+        if (p.id === id || p.hidden) continue;
+        hide.push(p.id);
+        left -= r.bar;
+      }
+      widths[id] = target - Math.max(left, 0);
+      update((d) => paneActions.close(collapse.reduce((x, c) => paneActions.setCollapsed(x, c, true), paneActions.setWidths(d, widths)), hide));
+    },
     /** These panes closed as × closes them (see paneActions.close). */
     close: (which: string[]) => update((d) => paneActions.close(frozen(d), which)),
     /** The pane showing another view instead, in its place (see paneActions.switchView). */

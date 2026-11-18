@@ -187,7 +187,8 @@ export function moveEdge(open: Sized[], k: number, d: number, free: number): Rec
  * open `need` px wider than its bar: from the empty room first, then the
  * other open panes shrink, those after it first, nearest first, then those
  * before it, each down to its min; if that isn't enough, open panes close
- * from the right (not `id`), each giving back all but its bar.
+ * from the right (not `id`), each giving back all but its bar; `short` is
+ * what is still missing after that.
  */
 export function fitOpening(open: Sized[], id: string, need: number, free: number, bar: number) {
   const widths = Object.fromEntries(open.map((p) => [p.id, p.width]));
@@ -203,7 +204,7 @@ export function fitOpening(open: Sized[], id: string, need: number, free: number
     short -= widths[p.id] - bar;
     delete widths[p.id];
   }
-  return { widths, collapse };
+  return { widths, collapse, short: Math.max(short, 0) };
 }
 
 /**

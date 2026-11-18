@@ -98,13 +98,13 @@ describe("moveEdge", () => {
 describe("fitOpening", () => {
   const p = (id: string, width: number, minWidth = 100) => ({ id, width, minWidth, maxWidth: Infinity });
   it("takes the empty room first and changes nobody when it's enough", () => {
-    expect(fitOpening([p("a", 300), p("new", 300)], "new", 277, 300, 23)).toEqual({ widths: { a: 300, new: 300 }, collapse: [] });
+    expect(fitOpening([p("a", 300), p("new", 300)], "new", 277, 300, 23)).toEqual({ widths: { a: 300, new: 300 }, collapse: [], short: 0 });
   });
   it("then shrinks the others, those after it first, to their min", () => {
     expect(fitOpening([p("a", 300), p("new", 300), p("c", 300)], "new", 277, 0, 23).widths).toEqual({ a: 223, new: 300, c: 100 });
   });
   it("then closes open panes from the right, not the one opening", () => {
-    expect(fitOpening([p("a", 100), p("new", 300), p("c", 100)], "new", 277, 0, 23)).toEqual({ widths: { new: 300 }, collapse: ["c", "a"] });
+    expect(fitOpening([p("a", 100), p("new", 300), p("c", 100)], "new", 277, 0, 23)).toEqual({ widths: { new: 300 }, collapse: ["c", "a"], short: 123 });
   });
 });
 

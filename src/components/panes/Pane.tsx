@@ -62,7 +62,7 @@ export function Pane({
   children: ReactNode;
 }) {
   usePaneRegistration({ id, label, icon, minWidth, defaultWidth, collapsedByDefault, ssr });
-  const { panes, narrow, showing, flashing, setCollapsed, close, addPane, switchView, setLimits, setWidths, jumpTo, move } = usePanes();
+  const { panes, narrow, showing, flashing, setCollapsed, close, addPane, switchView, setLimits, setWidths, grow, move } = usePanes();
   const { dragEdge, endDrag } = useEdgeDrag();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const popOutHref = { pathname, pane: viewOf(id) };
@@ -197,12 +197,10 @@ export function Pane({
         // that side is the one whose limits yield
         onDrag={(e, startX, side) => dragEdge(place, e.clientX - startX, sidePane(side)?.id)}
         onDragEnd={endDrag}
-        // double-click on a half: that side's pane as it started, its own width and limits
+        // double-click on a half: that side's pane can't be made narrower than it is now
         onReset={(side) => {
           const pane = sidePane(side);
-          if (!pane) return;
-          setLimits(pane.id, { min: undefined, max: undefined });
-          setWidths({ [pane.id]: pane.defaultWidth });
+          if (pane) setLimits(pane.id, { min: Math.round(paneElement(pane.id)?.getBoundingClientRect().width ?? pane.width) });
         }}
       />
       <div
@@ -216,8 +214,8 @@ export function Pane({
             </span>
             <button
               className="unstyled flex-1 min-w-0 truncate text-left !px-1 !py-1 hover:text-white touch-none cursor-move"
-              title={`Drag: move ${label} along the row, or out of the window into one of its own. Double-click: focus it (it open, the rest collapsed)`}
-              onDoubleClick={() => jumpTo(id)}
+              title={`Drag: move ${label} along the row, or out of the window into one of its own. Double-click: as wide as it may be, the others giving way from the right`}
+              onDoubleClick={() => grow(id)}
               {...titleDrag}
             >
               {label}

@@ -79,9 +79,10 @@ export function MinRule({
         role="slider"
         aria-label={`Set the narrowest ${label}`}
         aria-valuenow={shown}
-        title={`Drag to set the narrowest ${label}`}
+        title={`Drag to set the narrowest ${label}. Double-click: its width now`}
         className="absolute -top-px z-40 h-[3px] w-[1em] bg-slate-500 hover:bg-slate-200 cursor-ew-resize touch-none"
         style={{ left: Math.max(end - 16, 0) }}
+        onDoubleClick={() => onMin(Math.round(width))}
         {...handlers}
       />
     </div>
@@ -158,9 +159,10 @@ export function MaxRule({ label, maxWidth, onMax }: { label: string; maxWidth: n
       <div
         role="slider"
         aria-label={`Set the widest ${label}`}
-        title={`Drag to set the widest ${label} (to the bottom: no limit)`}
+        title={`Drag to set the widest ${label} (to the bottom: no limit). Double-click: its width now`}
         className="absolute right-[-1px] z-40 w-[3px] h-[1em] bg-slate-500 hover:bg-slate-200 cursor-ns-resize touch-none"
         style={{ top: Math.max(length - 16, 0) }}
+        onDoubleClick={() => onMax(Math.round(box.width))}
         {...handlers}
       />
     </div>
