@@ -1,6 +1,6 @@
 "use client";
 import { ReactNode, useRef, useState } from "react";
-import { PanesIcon } from "../icons/ActionIcons";
+import { PanesIcon, PopOutIcon } from "../icons/ActionIcons";
 import { useDragHandlers } from "./PaneBar";
 
 /** A view a pane can show, as the bars offer it. */
@@ -23,6 +23,7 @@ export function ViewIcons({
   hint,
   hrefOf,
   onView,
+  onPopOut,
   menuSide,
   drag,
   extras = [],
@@ -35,6 +36,8 @@ export function ViewIcons({
   hint: string;
   hrefOf: (view: string) => string;
   onView: OnView;
+  /** The view in its own window, from the icon on its row of the menu. */
+  onPopOut: (view: string) => void;
   /** Where the menu opens: beside a vertical bar, or below a button in a horizontal one. */
   menuSide: "left" | "right" | "below";
   /** A drag of the menu icon: the bar's own drag (see PaneBar). */
@@ -83,17 +86,32 @@ export function ViewIcons({
             onPointerDown={(e) => e.stopPropagation()}
           >
             {views.map((v) => (
-              <a
-                key={v.id}
-                role="menuitem"
-                href={hrefOf(v.id)}
-                className={"flex items-center gap-2 rounded px-2 py-1 hover:bg-slate-800/60 hover:text-white " + (v.id === current ? "text-blue-300" : "text-slate-300")}
-                title={`${v.label}: ${hint}`}
-                onClick={click(v.id)}
-              >
-                {v.icon}
-                {v.label}
-              </a>
+              <div key={v.id} className="flex items-center gap-1">
+                <a
+                  role="menuitem"
+                  href={hrefOf(v.id)}
+                  className={"flex flex-1 items-center gap-2 rounded px-2 py-1 hover:bg-slate-800/60 hover:text-white " + (v.id === current ? "text-blue-300" : "text-slate-300")}
+                  title={`${v.label}: ${hint}`}
+                  onClick={click(v.id)}
+                >
+                  {v.icon}
+                  {v.label}
+                </a>
+                <a
+                  href={hrefOf(v.id)}
+                  className="flex-none rounded px-1 py-1 text-slate-500 hover:text-slate-200"
+                  aria-label={`${v.label} in its own window`}
+                  title={`${v.label} in its own window, following this one`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setMenuAt(null);
+                    onPopOut(v.id);
+                  }}
+                >
+                  <PopOutIcon />
+                </a>
+              </div>
             ))}
             {extras.map((extra, i) => (
               <button

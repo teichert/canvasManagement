@@ -2,6 +2,7 @@
 import { useRef } from "react";
 import { MaxRule } from "./PaneRules";
 import { OnView, ViewChoice, ViewIcons } from "./ViewIcons";
+import { openPopOut } from "@/app/course/[courseName]/panes/popOut";
 
 // pointer travel that counts as a drag rather than a click
 const dragThreshold = 4;
@@ -205,6 +206,7 @@ export function PaneBar({
           hint="show it in this pane. Ctrl: a new pane of it next to this one. Ctrl+Shift: at the end of the row. Shift: in a new window following this one"
           hrefOf={(view) => `${popOutHref.pathname}?pane=${view}`}
           onView={onView}
+          onPopOut={(view) => openPopOut(popOutHref.pathname, view)}
           menuSide="right"
           drag={{ onDrag: (e, x) => onDrag(e, x), onDragEnd }}
           extras={closeActions}

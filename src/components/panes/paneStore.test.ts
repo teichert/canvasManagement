@@ -109,13 +109,14 @@ describe("fitOpening", () => {
 });
 
 describe("the max rule", () => {
-  it("shows how much of the widest width is left, as a share of its length from the top", () => {
-    expect(maxRuleShare(400, 300)).toBeCloseTo(0.25);
-    expect(maxRuleShare(400, 400)).toBe(0);
-    expect(maxRuleShare(400, 500)).toBe(0);
+  it("shows how much wider the pane may still be made, of what the row allows, from the top", () => {
+    expect(maxRuleShare(400, 300, 700)).toBeCloseTo(0.25);
+    expect(maxRuleShare(400, 400, 700)).toBe(0);
+    expect(maxRuleShare(400, 500, 700)).toBe(0);
+    expect(maxRuleShare(700, 300, 700)).toBe(1);
   });
   it("is the whole rule when there is no widest width", () => {
-    expect(maxRuleShare(Infinity, 300)).toBe(1);
+    expect(maxRuleShare(Infinity, 300, 700)).toBe(1);
   });
 });
 

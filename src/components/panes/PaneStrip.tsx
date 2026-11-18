@@ -237,7 +237,9 @@ export function usePanes() {
     /**
      * The pane as wide as its widest width (the row, with none) allows: the
      * others narrow to their narrowest, then collapse, then close, from the
-     * right (see fitOpening), as far as needed.
+     * right (see fitOpening), as far as needed. Already that wide: back to
+     * its narrowest, the collapsed panes reopening at their narrowest, in
+     * row order, as far as the room freed allows.
      */
     grow: (id: string) => {
       const r = row();
@@ -245,6 +247,18 @@ export function usePanes() {
       const now = r?.open.find((p) => p.id === id);
       if (!r || !pane || !now) return;
       const target = Math.min(pane.maxWidth, r.room);
+      if (now.width >= target - 1) {
+        const widths: Record<string, number> = { [id]: pane.minWidth };
+        let freed = now.width - pane.minWidth;
+        const reopen: string[] = [];
+        for (const p of panes) {
+          if (p.id === id || p.hidden || !p.collapsed || p.minWidth - r.bar > freed) continue;
+          reopen.push(p.id);
+          widths[p.id] = p.minWidth;
+          freed -= p.minWidth - r.bar;
+        }
+        return update((d) => reopen.reduce((x, c) => paneActions.setCollapsed(x, c, false), paneActions.setWidths(d, widths)));
+      }
       const { widths, collapse, short } = fitOpening(r.open, id, target - now.width, r.free, r.bar);
       const hide: string[] = [];
       let left = short;

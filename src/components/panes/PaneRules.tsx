@@ -91,17 +91,19 @@ export function MinRule({
 
 /**
  * The pane's widest width, as a rule down the right of its bar from under
- * the resize square: its length is the share of that width still unused
- * (see maxRuleShare), so it shrinks to nothing as the pane is widened to its
- * limit, and runs the whole way when there is no limit. It ends in a short
- * thick box; drag the box to set the limit (to the bottom: none).
+ * the resize square: its length is how much wider the pane may still be
+ * made, of what the row would allow (see maxRuleShare), so it shrinks to
+ * nothing as the pane is widened to its limit, and runs the whole way when
+ * the pane may take the whole row. It ends in a short thick box; drag the
+ * box to set the limit: to the top, no wider than now; to the bottom, the
+ * whole row.
  */
 export function MaxRule({ label, maxWidth, onMax }: { label: string; maxWidth: number; onMax: (max: number | undefined) => void }) {
   const ref = useRef<HTMLDivElement | null>(null);
   // measured, and followed as the pane is resized (a drag sets widths
   // without re-rendering): the pane's width on screen, the rule's room down
   // the bar, and where it starts, below the resize square
-  const [box, setBox] = useState({ width: 0, height: 0, top: 0 });
+  const [box, setBox] = useState({ width: 0, room: 0, height: 0, top: 0 });
   useLayoutEffect(() => {
     const el = ref.current;
     const bar = el?.parentElement;
@@ -111,22 +113,23 @@ export function MaxRule({ label, maxWidth, onMax }: { label: string; maxWidth: n
       const b = bar.getBoundingClientRect();
       const square = bar.querySelector("[data-resize-square]")?.getBoundingClientRect();
       const top = square ? square.bottom - b.top + 4 : 4;
-      setBox({ width: pane.getBoundingClientRect().width, height: Math.max(b.height - top - 24, 0), top });
+      setBox({ width: pane.getBoundingClientRect().width, room: pane.parentElement?.clientWidth ?? 0, height: Math.max(b.height - top - 24, 0), top });
     };
     const observer = new ResizeObserver(measure);
     observer.observe(pane);
     observer.observe(bar);
+    if (pane.parentElement) observer.observe(pane.parentElement);
     return () => observer.disconnect();
   }, []);
-  const { width, height } = box;
+  const { width, room, height } = box;
   // while the box is dragged: the share of the rule it points at
   const [live, setLive] = useState<number | null>(null);
   const at = (e: React.PointerEvent) => {
     const top = ref.current?.getBoundingClientRect().top ?? 0;
     return height > 0 ? Math.min(Math.max((e.clientY - top) / height, 0), 1) : 0;
   };
-  // the share back to a bound: none at the bottom of the rule
-  const maxFor = (share: number) => (share >= 0.98 ? undefined : Math.round(width / (1 - share)));
+  // the share back to a bound: the whole row (no bound) at the bottom of the rule
+  const maxFor = (share: number) => (share >= 0.98 ? undefined : Math.round(width + share * Math.max(room - width, 0)));
   const handlers = useDragHandlers(
     (e) => setLive(at(e)),
     () => {
@@ -134,7 +137,7 @@ export function MaxRule({ label, maxWidth, onMax }: { label: string; maxWidth: n
       setLive(null);
     },
   );
-  const share = live ?? maxRuleShare(maxWidth, width);
+  const share = live ?? maxRuleShare(maxWidth, width, room);
   const length = share * height;
   const liveMax = live !== null ? maxFor(live) : undefined;
   return (
@@ -143,23 +146,23 @@ export function MaxRule({ label, maxWidth, onMax }: { label: string; maxWidth: n
       className="absolute right-0.5 w-1.5"
       style={{ top: box.top, height }}
       role="img"
-      aria-label={`Widest ${label}: ${Number.isFinite(maxWidth) ? `${Math.round(maxWidth)} px` : "no limit"}`}
+      aria-label={`Widest ${label}: ${Number.isFinite(maxWidth) ? `${Math.round(maxWidth)} px` : "the whole row"}`}
       title={
         Number.isFinite(maxWidth)
-          ? `${label} can't be made wider than ${Math.round(maxWidth)} px by dragging a bar (a drag from a resize square can, and moves this); the rule is how much of that is left`
-          : `${label} has no widest width`
+          ? `${label} can't be made wider than ${Math.round(maxWidth)} px by dragging a bar (a drag from a resize square can, and moves this); the rule is how much wider it may still be made`
+          : `${label} may be made as wide as the row`
       }
     >
       <div className="absolute top-0 right-0 w-px bg-slate-700" style={{ height: length }} />
       {live !== null && (
         <span className="absolute left-full ml-1 z-40 whitespace-nowrap rounded bg-gray-950/90 px-1 text-[10px] text-slate-300 pointer-events-none" style={{ top: length - 6 }}>
-          {liveMax === undefined ? "max width: no limit" : `max width ${liveMax} px`}
+          {liveMax === undefined ? "max width: the whole row" : `max width ${liveMax} px`}
         </span>
       )}
       <div
         role="slider"
         aria-label={`Set the widest ${label}`}
-        title={`Drag to set the widest ${label} (to the bottom: no limit). Double-click: its width now`}
+        title={`Drag to set the widest ${label}: to the top, no wider than now; to the bottom, the whole row. Double-click: its width now`}
         className="absolute right-[-1px] z-40 w-[3px] h-[1em] bg-slate-500 hover:bg-slate-200 cursor-ns-resize touch-none"
         style={{ top: Math.max(length - 16, 0) }}
         onDoubleClick={() => onMax(Math.round(box.width))}

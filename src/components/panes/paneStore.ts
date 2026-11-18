@@ -208,13 +208,13 @@ export function fitOpening(open: Sized[], id: string, need: number, free: number
 }
 
 /**
- * The max rule (see PaneRules): how much of the pane's widest width is
- * still unused, as the share of the rule's length, from the top: nothing
- * left when the pane is as wide as it may be, the whole rule when it has
- * no widest width.
+ * The max rule (see PaneRules): how much wider the pane may still be made,
+ * as the share of the rule's length from the top, of what the row would
+ * allow: nothing when the pane is as wide as it may be, the whole rule when
+ * it may take the whole row (no widest width).
  */
-export const maxRuleShare = (maxWidth: number, width: number) =>
-  Number.isFinite(maxWidth) && maxWidth > 0 ? Math.min(Math.max((maxWidth - width) / maxWidth, 0), 1) : 1;
+export const maxRuleShare = (maxWidth: number, width: number, room: number) =>
+  Number.isFinite(maxWidth) && room > width ? Math.min(Math.max((maxWidth - width) / (room - width), 0), 1) : 1;
 
 /** `order` with `id` moved to `index`. */
 export function movePane(order: string[], id: string, index: number): string[] {

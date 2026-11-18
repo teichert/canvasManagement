@@ -73,6 +73,7 @@ export function CourseFrame({ children }: { children: ReactNode }) {
               stack={false}
               hint="show it in this window. Ctrl or Shift: in another window following the same page"
               hrefOf={(view) => popOutUrl(pathname, view)}
+              onPopOut={(view) => openPopOut(pathname, view)}
               onView={(view, e) =>
                 e.ctrlKey || e.metaKey || e.shiftKey
                   ? openPopOut(pathname, view, e.shiftKey)
