@@ -23,6 +23,9 @@ export type PaneDoc = {
   displaced?: Displaced[];
 };
 export type Displaced = { id: string; collapsed: boolean; hidden: boolean; width: number };
+/** Every pane as it is now, for a cascade's record (see paneActions.makeRoom): its state, and its width on the page (`open`). */
+export const displacedNow = (panes: PaneView[], open: Sized[]): Record<string, Displaced> =>
+  Object.fromEntries(panes.map((p) => [p.id, { id: p.id, collapsed: p.collapsed, hidden: p.hidden, width: open.find((o) => o.id === p.id)?.width ?? p.width }]));
 export const paneDocKey = "panes";
 
 export function parseDoc(json: string | null): PaneDoc {
@@ -45,6 +48,8 @@ export type PaneSpec = {
   defaultWidth: number;
   /** Until the pane is first toggled; it can look at the window. */
   collapsedByDefault: () => boolean;
+  /** Not on the page until asked for. */
+  hiddenByDefault: boolean;
   /** The server renders this pane expanded; the rest start collapsed until the remembered choices are known. */
   ssr: boolean;
 };
@@ -76,7 +81,7 @@ export function viewPanes(specs: PaneSpec[], doc: PaneDoc, hydrated: boolean): P
     const saved = doc.panes?.[spec.id] ?? {};
     return {
       ...spec,
-      hidden: saved.hidden ?? false,
+      hidden: saved.hidden ?? spec.hiddenByDefault,
       collapsed: saved.collapsed ?? (hydrated ? spec.collapsedByDefault() : !spec.ssr),
       width: saved.width ?? spec.defaultWidth,
       minWidth: saved.min ?? spec.minWidth,
@@ -188,23 +193,25 @@ export function moveEdge(open: Sized[], k: number, d: number, free: number): Rec
 }
 
 /**
- * Room for the pane `id` (in `open`, the open panes in order with it) to
- * open `need` px wider than its bar: from the empty room first, then the
- * other open panes shrink, those after it first, nearest first, then those
+ * Room for the panes `keep` (in `open`, the open panes in order with them) to
+ * open `need` px wider than their bars: from the empty room first (`free`,
+ * negative when the row is already wider than its room), then the other open
+ * panes shrink, those after the first kept first, nearest first, then those
  * before it, each down to its min; if that isn't enough, open panes close
- * from the right (not `id`), each giving back all but its bar; `short` is
+ * from the right (none kept), each giving back all but its bar; `short` is
  * what is still missing after that.
  */
-export function fitOpening(open: Sized[], id: string, need: number, free: number, bar: number) {
+export function fitOpening(open: Sized[], keep: string[], need: number, free: number, bar: number) {
   const widths = Object.fromEntries(open.map((p) => [p.id, p.width]));
-  const at = open.findIndex((p) => p.id === id);
-  const others = [...open.slice(at + 1), ...open.slice(0, at).reverse()];
+  const first = open.findIndex((p) => keep.includes(p.id));
+  const at = first === -1 ? open.length : first;
+  const others = [...open.slice(at + 1), ...open.slice(0, at).reverse()].filter((p) => !keep.includes(p.id));
   let short = need - free;
   if (short > 0) short -= spread(widths, others, short, (p) => widths[p.id] - p.minWidth, -1);
   const collapse: string[] = [];
   for (const p of [...open].reverse()) {
     if (short <= 0) break;
-    if (p.id === id) continue;
+    if (keep.includes(p.id)) continue;
     collapse.push(p.id);
     short -= widths[p.id] - bar;
     delete widths[p.id];
@@ -218,14 +225,16 @@ export function fitOpening(open: Sized[], id: string, need: number, free: number
  * first, then open panes collapsed from the right) and then, still short,
  * panes hidden from the right, their bars' room included; the width the
  * pane ends up with, and what gave way. The title's double-click and the
- * narrowest-width box dragged past the pane's width both do this.
+ * narrowest-width box dragged past the pane's width both do this, and so
+ * does a row wider than its room (`free` below zero): then `id` is the pane
+ * that keeps its width, the rest give way.
  */
 export function makeRoom(open: Sized[], ids: string[], id: string, target: number, free: number, lead: number, bar: number) {
   const now = open.find((p) => p.id === id);
-  if (!now) return undefined;
+  const need = now ? target - now.width : 0;
   // the empty room at either end goes first: the lead's share of it is given back to the row
-  const { widths, collapse, short } = fitOpening(open, id, target - now.width, free + lead, bar);
-  widths[leadId] = lead - Math.max(Math.min(Math.max(target - now.width, 0), free + lead) - free, 0);
+  const { widths, collapse, short } = fitOpening(open, [id], need, free + lead, bar);
+  widths[leadId] = lead - Math.max(Math.min(Math.max(need, 0), free + lead) - free, 0);
   const hide: string[] = [];
   let left = short;
   for (const other of [...ids].reverse()) {
@@ -234,7 +243,7 @@ export function makeRoom(open: Sized[], ids: string[], id: string, target: numbe
     hide.push(other);
     left -= bar;
   }
-  widths[id] = target - Math.max(left, 0);
+  if (now) widths[id] = target - Math.max(left, 0);
   return { widths, collapse, hide };
 }
 
@@ -296,16 +305,13 @@ export const paneActions = {
     room: { widths: Record<string, number>; collapse: string[]; hide: string[] },
     before: Record<string, Displaced>,
   ): PaneDoc => {
-    const displaced = [...(doc.displaced ?? []).filter((d) => !room.collapse.includes(d.id) && !room.hide.includes(d.id))];
+    // a pane the cascade changes is recorded as it was; one already collapsed or hidden keeps the
+    // record it has (a row that can't fit is fitted again after every change: nothing new to remember)
+    const newly = [...new Set([...room.collapse.filter((id) => !before[id]?.collapsed), ...room.hide.filter((id) => !before[id]?.hidden)])];
+    const displaced = [...(doc.displaced ?? []).filter((d) => !newly.includes(d.id)), ...newly.map((id) => before[id])];
     let next = paneActions.setWidths(doc, room.widths);
-    for (const id of room.collapse) {
-      next = withPane(next, id, { collapsed: true });
-      displaced.push(before[id]);
-    }
-    for (const id of room.hide) {
-      next = withPane(next, id, { hidden: true });
-      displaced.push(before[id]);
-    }
+    for (const id of room.collapse) next = withPane(next, id, { collapsed: true });
+    for (const id of room.hide) next = withPane(next, id, { hidden: true });
     return { ...next, displaced };
   },
   /** The last pane a cascade displaced, put back as it was. */
@@ -319,7 +325,7 @@ export const paneActions = {
   add: (doc: PaneDoc, ids: string[], view: string, index?: number): PaneDoc => {
     const id = freeId(ids, view);
     const order = index === undefined ? undefined : [...ids.slice(0, index), id, ...ids.slice(index)];
-    return { ...withPane(doc, id, { collapsed: false }), ...(order && { order }), added: [...(doc.added ?? []), id] };
+    return { ...withPane(doc, id, { collapsed: false, hidden: false }), ...(order && { order }), added: [...(doc.added ?? []), id] };
   },
   /**
    * The pane `id` showing `view` instead: a new pane of that view takes its
@@ -331,7 +337,7 @@ export const paneActions = {
     const next = freeId(ids, view);
     // open: the icons are on an expanded pane's bar, and the new pane's own default could be collapsed
     const { hidden: _hidden, ...state } = doc.panes?.[id] ?? {};
-    const moved = withPane({ ...doc, order: ids.map((x) => (x === id ? next : x)), added: [...(doc.added ?? []), next] }, next, { ...state, collapsed: false });
+    const moved = withPane({ ...doc, order: ids.map((x) => (x === id ? next : x)), added: [...(doc.added ?? []), next] }, next, { ...state, collapsed: false, hidden: false });
     return id.includes("#") ? paneActions.remove({ ...moved, order: moved.order }, id) : withPane(moved, id, { hidden: true });
   },
   /** An added pane taken away for good (a catalogue pane is only hidden). */

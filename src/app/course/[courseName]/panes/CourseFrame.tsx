@@ -53,8 +53,9 @@ export function CourseFrame({ children }: { children: ReactNode }) {
     }),
   ];
   // as the menus list them: in the order chosen there, those below the divider off the icon stacks
+  const minWidth = paneMinWidth();
   const views = orderPanes(
-    coursePanes.map(({ id, label, icon }) => ({ id, label, icon, hidden: prefs.hidden?.includes(id) })),
+    coursePanes.map(({ id, label, icon, belowDivider }) => ({ id, label, icon, hidden: prefs.hidden ? prefs.hidden.includes(id) : !!belowDivider })),
     prefs.order,
   );
   const popOut = usePopOutPane();
@@ -122,7 +123,7 @@ export function CourseFrame({ children }: { children: ReactNode }) {
           <LeadSpacer />
           {panes.map(({ Content, ...pane }) => (
             // the server renders what the first screen shows: the course page's calendar
-            <Pane key={pane.id} {...pane} minWidth={paneMinWidth} views={views} ssr={pane.id === "calendar" && onCoursePage}>
+            <Pane key={pane.id} {...pane} hiddenByDefault={pane.offByDefault} minWidth={minWidth} views={views} ssr={pane.id === "calendar" && onCoursePage}>
               <Content {...ctx} />
             </Pane>
           ))}
@@ -161,8 +162,13 @@ export function CourseFrameWithPanes({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    <PaneStrip onShowPane={popOut ? (view) => router.navigate({ to: pathname as any, search: { pane: view } as any }) : undefined}>
+    <PaneStrip
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      onShowPane={popOut ? (view) => router.navigate({ to: pathname as any, search: { pane: view } as any }) : undefined}
+      // some views are better off in a window of their own: a link to one opens that
+      popsOut={(view) => !!coursePanes.find((p) => p.id === view)?.popOut}
+      onPopOut={(view) => openPopOut(pathname, view)}
+    >
       <CourseFrame>{children}</CourseFrame>
     </PaneStrip>
   );

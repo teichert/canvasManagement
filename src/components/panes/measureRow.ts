@@ -7,7 +7,7 @@ export const paneElement = (id: string) => document.querySelector<HTMLElement>(`
 export type Row = {
   /** The open panes, in order, at their widths on the page. */
   open: Sized[];
-  /** The room left empty at the row's end. */
+  /** The room left empty at the row's end; below zero, how far the panes reach past it. */
   free: number;
   /** How wide a collapsed pane is: its bar. */
   bar: number;
@@ -39,7 +39,7 @@ export function measureRow(panes: PaneView[]): Row {
   const room = row.clientWidth - endBarWidth - gap * Math.max(shown.length - 1, 0);
   return {
     open: sized(room),
-    free: Math.max(box.right - endBarWidth - end, 0),
+    free: box.right - endBarWidth - end,
     bar: barEl?.getBoundingClientRect().width ?? 23,
     room,
   };

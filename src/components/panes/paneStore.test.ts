@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { fitOpening, leadId, limitsAfter, makeRoom, maxRuleShare, moveEdge, withLead, movePane, paneActions, PaneSpec, parseDoc, relax, showingPane, viewOf, viewPanes, widthRule } from "./paneStore";
 
 const spec = (id: string, extra: Partial<PaneSpec> = {}): PaneSpec => ({
+  hiddenByDefault: false,
   id,
   label: id,
   minWidth: 120,
@@ -98,13 +99,13 @@ describe("moveEdge", () => {
 describe("fitOpening", () => {
   const p = (id: string, width: number, minWidth = 100) => ({ id, width, minWidth, maxWidth: Infinity });
   it("takes the empty room first and changes nobody when it's enough", () => {
-    expect(fitOpening([p("a", 300), p("new", 300)], "new", 277, 300, 23)).toEqual({ widths: { a: 300, new: 300 }, collapse: [], short: 0 });
+    expect(fitOpening([p("a", 300), p("new", 300)], ["new"], 277, 300, 23)).toEqual({ widths: { a: 300, new: 300 }, collapse: [], short: 0 });
   });
   it("then shrinks the others, those after it first, to their min", () => {
-    expect(fitOpening([p("a", 300), p("new", 300), p("c", 300)], "new", 277, 0, 23).widths).toEqual({ a: 223, new: 300, c: 100 });
+    expect(fitOpening([p("a", 300), p("new", 300), p("c", 300)], ["new"], 277, 0, 23).widths).toEqual({ a: 223, new: 300, c: 100 });
   });
   it("then closes open panes from the right, not the one opening", () => {
-    expect(fitOpening([p("a", 100), p("new", 300), p("c", 100)], "new", 277, 0, 23)).toEqual({ widths: { new: 300 }, collapse: ["c", "a"], short: 123 });
+    expect(fitOpening([p("a", 100), p("new", 300), p("c", 100)], ["new"], 277, 0, 23)).toEqual({ widths: { new: 300 }, collapse: ["c", "a"], short: 123 });
   });
 });
 
@@ -172,7 +173,7 @@ describe("panes added beyond the catalogue", () => {
   it("adds a view's next free copy, open, at the end, and makes it current", () => {
     const doc = paneActions.add({ panes: { editor: { collapsed: true } } }, ids, "editor");
     expect(doc.added).toEqual(["editor#3"]);
-    expect(doc.panes?.["editor#3"]).toEqual({ collapsed: false });
+    expect(doc.panes?.["editor#3"]).toEqual({ collapsed: false, hidden: false });
     expect(viewOf("editor#3")).toBe("editor");
     expect(viewOf("editor")).toBe("editor");
   });
@@ -187,7 +188,7 @@ describe("a pane switched to another view", () => {
   it("takes the pane's place, width and limits; a catalogue pane is hidden, a copy removed", () => {
     const doc = paneActions.switchView({ panes: { calendar: { width: 500, max: 600 } } }, ids, "calendar", "editor");
     expect(doc.order).toEqual(["editor#2", "editor"]);
-    expect(doc.panes?.["editor#2"]).toEqual({ width: 500, max: 600, collapsed: false });
+    expect(doc.panes?.["editor#2"]).toEqual({ width: 500, max: 600, collapsed: false, hidden: false });
     expect(doc.panes?.calendar).toEqual({ width: 500, max: 600, hidden: true });
     const again = paneActions.switchView(doc, ["editor#2", "editor"], "editor#2", "preview");
     expect(again.order).toEqual(["preview#2", "editor"]);
@@ -229,14 +230,25 @@ describe("a cascade making room (the title's double-click, the narrowest box dra
     expect(made?.widths).toEqual({ a: 500, b: 300, c: 300, [leadId]: 150 });
     expect(made?.collapse).toEqual([]);
   });
+  it("fits a row wider than its room: the first pane keeps its width, the rest give way from the right, the empty room before the first pane first", () => {
+    // the row is 150 too narrow for three 300s; the room before a gives 100 of it, b (nearest a) narrows for the rest
+    const made = makeRoom(open, ["a", "b", "c"], "a", 300, -150, 100, 23);
+    expect(made.widths).toEqual({ a: 300, b: 250, c: 300, [leadId]: 0 });
+    expect(made.collapse).toEqual([]);
+    // 500 too narrow: narrowing finds 400, collapsing c then b (narrowed to 100) 77 each
+    expect(makeRoom(open, ["a", "b", "c"], "a", 300, -500, 0, 23)).toEqual({ widths: { a: 300, [leadId]: 0 }, collapse: ["c", "b"], hide: [] });
+  });
   it("remembers what it displaced, as it was, and puts the last one back", () => {
     const before = { b: { id: "b", collapsed: false, hidden: false, width: 300 }, c: { id: "c", collapsed: false, hidden: false, width: 300 } };
     const doc = paneActions.makeRoom({}, { widths: { a: 700 }, collapse: ["c", "b"], hide: ["c"] }, before);
     expect(doc.panes?.c).toEqual({ collapsed: true, hidden: true });
-    expect(doc.displaced?.map((d) => d.id)).toEqual(["c", "b", "c"]);
+    expect(doc.displaced?.map((d) => d.id)).toEqual(["c", "b"]);
     const back = paneActions.restore(doc, doc.displaced!.at(-1)!);
-    expect(back.panes?.c).toEqual({ collapsed: false, hidden: false, width: 300 });
-    expect(back.displaced?.map((d) => d.id)).toEqual(["b"]);
-    expect(paneActions.forget(doc, ["b"]).displaced?.map((d) => d.id)).toEqual(["c", "c"]);
+    expect(back.panes?.b).toEqual({ collapsed: false, hidden: false, width: 300 });
+    expect(back.displaced?.map((d) => d.id)).toEqual(["c"]);
+    expect(paneActions.forget(doc, ["b"]).displaced?.map((d) => d.id)).toEqual(["c"]);
+    // fitted again with nothing new to displace (a row that can't fit): the records stay as they were
+    const again = { b: { ...before.b, collapsed: true }, c: { ...before.c, collapsed: true, hidden: true } };
+    expect(paneActions.makeRoom(doc, { widths: { a: 700 }, collapse: ["c", "b"], hide: ["c"] }, again).displaced).toEqual(doc.displaced);
   });
 });

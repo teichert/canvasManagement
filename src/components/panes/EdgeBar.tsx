@@ -21,7 +21,7 @@ import { openPopOut, popOutUrl } from "@/app/course/[courseName]/panes/popOut";
  * view in a new window following this one.
  */
 export function EdgeBar({ end, views }: { end: "start" | "end"; views: ViewChoice[] }) {
-  const { panes, narrow, setLimits, addPane, showView, close } = usePanes();
+  const { panes, narrow, setLimits, addPane, showView, close, restoreDefaults } = usePanes();
   const { dragEdge, endDrag } = useEdgeDrag();
   const at = end === "start" ? 0 : panes.length;
   const handlers = useDragHandlers((e, x) => dragEdge(at, e.clientX - x), endDrag);
@@ -59,7 +59,10 @@ export function EdgeBar({ end, views }: { end: "start" | "end"; views: ViewChoic
         onView={(view, e) => (e.shiftKey && !e.ctrlKey && !e.metaKey ? openPopOut(pathname, view, true) : e.ctrlKey || e.metaKey ? add(view) : showView(view, end))}
         menuSide={inner}
         drag={{ onDrag: (e, x) => dragEdge(at, e.clientX - x), onDragEnd: endDrag }}
-        extras={[{ label: "Close every pane", onClick: () => close(panes.map((p) => p.id)) }]}
+        extras={[
+          { label: "Close every pane", onClick: () => close(panes.map((p) => p.id)) },
+          { label: "Restore the default layout", onClick: restoreDefaults },
+        ]}
       />
     </div>
   );

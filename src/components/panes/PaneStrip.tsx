@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useReducer,
   useLayoutEffect,
   useState,
   useSyncExternalStore,
@@ -23,6 +24,7 @@ const writePaneDoc = (json: string) => {
 import { measureRow, Row } from "./measureRow";
 import {
   Displaced,
+  displacedNow,
   fitOpening,
   isShown,
   leadId,
@@ -45,23 +47,22 @@ import {
  * their narrowest, those after it first, then open panes closed from the
  * right. On a phone, or without a row to measure, simply shown.
  */
-function openWithRoom(doc: PaneDoc, panes: PaneView[], row: Row | undefined, id: string, lead = 0): PaneDoc {
-  const pane = panes.find((p) => p.id === id);
+function openWithRoom(doc: PaneDoc, panes: PaneView[], row: Row | undefined, ids: string[], lead = 0): PaneDoc {
+  const shown = (d: PaneDoc) => ids.reduce((x, id) => paneActions.show(x, id), d);
+  const opening = panes.filter((p) => ids.includes(p.id) && !isShown(p));
   // already open: nothing to make room for
-  if (!pane || !row || isShown(pane)) return paneActions.show(doc, id);
+  if (!opening.length || !row) return shown(doc);
   const measured = Object.fromEntries(row.open.map((p) => [p.id, p.width]));
-  const opening = panes
-    .filter((p) => measured[p.id] !== undefined || p.id === id)
-    .map((p) => ({ id: p.id, width: p.id === id ? Math.max(p.width, p.minWidth) : measured[p.id], minWidth: p.minWidth, maxWidth: p.maxWidth }));
+  const wanted = (p: PaneView) => Math.max(p.width, p.minWidth);
+  const sized = panes
+    .filter((p) => measured[p.id] !== undefined || opening.includes(p))
+    .map((p) => ({ id: p.id, width: opening.includes(p) ? wanted(p) : measured[p.id], minWidth: p.minWidth, maxWidth: p.maxWidth }));
   // a hidden pane has no bar on the page yet: it needs its bar's room too
-  const need = Math.max(pane.width, pane.minWidth) - (pane.hidden ? 0 : row.bar);
+  const need = opening.reduce((sum, p) => sum + wanted(p) - (p.hidden ? 0 : row.bar), 0);
   // the empty room at either end of the row goes first
-  const { widths, collapse } = fitOpening(opening, id, need, row.free + lead, row.bar);
+  const { widths, collapse } = fitOpening(sized, ids, need, row.free + lead, row.bar);
   widths[leadId] = lead - Math.max(Math.min(Math.max(need, 0), row.free + lead) - row.free, 0);
-  return paneActions.show(
-    collapse.reduce((d, other) => paneActions.setCollapsed(d, other, true), paneActions.setWidths(doc, widths)),
-    id,
-  );
+  return shown(collapse.reduce((d, other) => paneActions.setCollapsed(d, other, true), paneActions.setWidths(doc, widths)));
 }
 
 type Strip = {
@@ -116,10 +117,15 @@ const subscribeToNothing = () => () => {};
 export function PaneStrip({
   children,
   onShowPane,
+  popsOut,
+  onPopOut,
 }: {
   children: ReactNode;
   /** A window that shows one view (a pop-out): what a link to a view does instead, and the layout is never written. */
   onShowPane?: (view: string) => void;
+  /** Views a link opens in a window of their own instead of a pane. */
+  popsOut?: (view: string) => boolean;
+  onPopOut?: (view: string) => void;
 }) {
   const [specs, setSpecs] = useState<PaneSpec[]>([]);
   const register = useCallback((spec: PaneSpec) => {
@@ -157,6 +163,7 @@ export function PaneStrip({
   // child's effect runs (a page url that shows a pane does so as it mounts)
   useLayoutEffect(() => {
     opener = onShowPane ?? ((view) => {
+      if (popsOut?.(view) && onPopOut) return onPopOut(view);
       // before the panes have registered (a page url that shows a pane, as the page loads), the document says what is on the page
       if (!panes.length) {
         const doc = parseDoc(readPaneDoc());
@@ -165,7 +172,7 @@ export function PaneStrip({
       }
       const pane = panes.find((p) => viewOf(p.id) === view && !p.hidden);
       if (!pane) return update((d) => paneActions.add(d, panes.map((p) => p.id), view));
-      update((d) => openWithRoom(d, panes, narrow ? undefined : measureRow(panes), pane.id, lead));
+      update((d) => openWithRoom(d, panes, narrow ? undefined : measureRow(panes), [pane.id], lead));
     });
     return () => {
       opener = undefined;
@@ -175,14 +182,29 @@ export function PaneStrip({
   useEffect(() => {
     document.documentElement.dataset.panesReady = "true";
   }, []);
-  // what a cascade displaced comes back, last first, as the room allows: after
-  // every change to the layout, the last entry is put back if it fits now
+  // the window's size is part of the layout: its change is a change to look at
+  const [, resized] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    window.addEventListener("resize", resized);
+    return () => window.removeEventListener("resize", resized);
+  }, []);
+  // After every change to the layout or the window: a row wider than its room
+  // (the window made smaller, a layout from a wider window, a pane added to a
+  // full row) has its first open pane keep its width and the rest give way as a
+  // cascade does (see makeRoom), remembered; and what a cascade displaced comes
+  // back, last first, as the room allows: the last entry is put back if it fits now
   useLayoutEffect(() => {
+    if (narrow || !hydrated) return;
+    const r = measureRow(panes);
+    if (r.free < -1 && r.open.length) {
+      const first = r.open[0];
+      const made = makeRoom(r.open, panes.filter((p) => !p.hidden).map((p) => p.id), first.id, first.width, r.free, lead, r.bar);
+      return update((d) => paneActions.makeRoom(d, made, displacedNow(panes, r.open)));
+    }
     const entry = parseDoc(json).displaced?.at(-1);
-    if (!entry || narrow || !hydrated) return;
+    if (!entry) return;
     const pane = panes.find((p) => p.id === entry.id);
     if (!pane) return update((d) => paneActions.restore(d, entry));
-    const r = measureRow(panes);
     const has = pane.hidden ? 0 : pane.collapsed ? r.bar : r.open.find((o) => o.id === pane.id)?.width ?? pane.width;
     const wants = entry.hidden ? 0 : entry.collapsed ? r.bar : Math.max(entry.width, pane.minWidth);
     if (wants - has <= r.free + 1) update((d) => paneActions.restore(d, entry));
@@ -239,6 +261,13 @@ export function usePanes() {
     flash,
     /** The views' order in the menus, and which are kept below the divider, off the icon stacks. */
     setViews: (order: string[], hidden: string[]) => update((d) => paneActions.setViews(d, order, hidden)),
+    /** These panes on the page and open, room made for them together (see openWithRoom); a hidden one comes on where it stands. */
+    show: (...ids: string[]) => {
+      const r = row();
+      update((d) => openWithRoom(d, panes, r, ids, lead));
+    },
+    /** The layout as the catalogue has it: every pane at its default, the menus in their first order; the pinned bars stay. */
+    restoreDefaults: () => update((d) => ({ pins: d.pins })),
     /** Another pane of a view, open, at `index` in the row (none: at the end). */
     addPane: (view: string, index?: number) => update((d) => paneActions.add(d, ids, view, index)),
     /**
@@ -255,7 +284,7 @@ export function usePanes() {
       if (narrow) update((d) => paneActions.jumpTo(added(d), [...ids, id], id));
       else if (!pane || !isShown(pane)) {
         const r = row();
-        update((d) => (pane ? openWithRoom(d, panes, r, id, lead) : added(d)));
+        update((d) => (pane ? openWithRoom(d, panes, r, [id], lead) : added(d)));
       }
       flash(id);
     },
@@ -269,9 +298,7 @@ export function usePanes() {
       const r = row();
       if (!r) return;
       const made = makeRoom(r.open, panes.filter((p) => !p.hidden).map((p) => p.id), id, target, r.free, lead, r.bar);
-      if (!made) return;
-      const before = Object.fromEntries(panes.map((p) => [p.id, { id: p.id, collapsed: p.collapsed, hidden: p.hidden, width: r.open.find((o) => o.id === p.id)?.width ?? p.width }]));
-      update((d) => paneActions.makeRoom(d, made, before));
+      update((d) => paneActions.makeRoom(d, made, displacedNow(panes, r.open)));
     },
     /**
      * The pane as wide as its widest width (the row, with none) allows, by
@@ -286,9 +313,8 @@ export function usePanes() {
       const target = Math.min(now.maxWidth, r.room);
       const made = makeRoom(r.open, panes.filter((p) => !p.hidden).map((p) => p.id), id, target, r.free, lead, r.bar);
       // growing would change nothing: it is as wide as it may be, so back to its narrowest instead
-      if (!made || made.widths[id] - now.width < 2) return update((d) => paneActions.setWidths(d, { [id]: pane.minWidth }));
-      const before = Object.fromEntries(panes.map((p) => [p.id, { id: p.id, collapsed: p.collapsed, hidden: p.hidden, width: r.open.find((o) => o.id === p.id)?.width ?? p.width }]));
-      update((d) => paneActions.makeRoom(d, made, before));
+      if (made.widths[id] - now.width < 2) return update((d) => paneActions.setWidths(d, { [id]: pane.minWidth }));
+      update((d) => paneActions.makeRoom(d, made, displacedNow(panes, r.open)));
     },
     /** What a cascade decided (see makeRoom), written to the layout with what it displaced remembered. */
     applyRoom: (made: { widths: Record<string, number>; collapse: string[]; hide: string[] }, before: Record<string, Displaced>) =>
@@ -301,7 +327,7 @@ export function usePanes() {
     setCollapsed: (id: string, collapsed: boolean) => {
       if (collapsed || narrow) return update((d) => paneActions.setCollapsed(paneActions.forget(frozen(d), [id]), id, collapsed));
       const r = row();
-      update((d) => openWithRoom(d, panes, r, id, lead));
+      update((d) => openWithRoom(d, panes, r, [id], lead));
     },
     /** The narrowest and widest the pane may be made; undefined forgets one. */
     setLimits: (id: string, limits: { min?: number; max?: number }) => update((d) => paneActions.setLimits(d, id, limits)),

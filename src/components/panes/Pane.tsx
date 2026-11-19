@@ -36,6 +36,7 @@ export function Pane({
   defaultWidth = 432,
   keepMounted = true,
   collapsedByDefault = () => false,
+  hiddenByDefault = false,
   ssr = false,
   views,
   bodyRef,
@@ -53,6 +54,8 @@ export function Pane({
   keepMounted?: boolean;
   /** Until the pane is first toggled (it can look at the window). */
   collapsedByDefault?: () => boolean;
+  /** Not on the page until asked for. */
+  hiddenByDefault?: boolean;
   /** The server renders this pane expanded (the rest start collapsed until the remembered choices are known). */
   ssr?: boolean;
   /** The views the pane can be switched to, on its bar. */
@@ -60,8 +63,8 @@ export function Pane({
   bodyRef?: RefObject<HTMLDivElement | null> | ((el: HTMLDivElement | null) => void);
   children: ReactNode;
 }) {
-  usePaneRegistration({ id, label, icon, minWidth, defaultWidth, collapsedByDefault, ssr });
-  const { panes, narrow, showing, flashing, setCollapsed, close, addPane, switchView, setLimits, grow, move } = usePanes();
+  usePaneRegistration({ id, label, icon, minWidth, defaultWidth, collapsedByDefault, hiddenByDefault, ssr });
+  const { panes, narrow, showing, flashing, setCollapsed, close, addPane, switchView, setLimits, grow, move, restoreDefaults } = usePanes();
   const { dragEdge, endDrag } = useEdgeDrag();
   const cascade = useCascadeDrag();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -194,6 +197,7 @@ export function Pane({
           { label: "Close every pane", onClick: () => close(panes.map((p) => p.id)) },
           { label: "Close the panes to the left", onClick: () => close(panes.slice(0, place).map((p) => p.id)) },
           { label: "Close the panes to the right", onClick: () => close(panes.slice(place + 1).map((p) => p.id)) },
+          { label: "Restore the default layout", onClick: restoreDefaults },
         ]}
         square={{ left: leftPane?.label, right: rightPane?.label }}
         onMove={onMove}

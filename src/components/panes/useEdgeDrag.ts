@@ -2,7 +2,7 @@
 import { useRef } from "react";
 import { usePanes } from "./PaneStrip";
 import { measureRow, paneElement } from "./measureRow";
-import { Displaced, leadId, limitsAfter, makeRoom, moveEdge, relax, Sized, widthRule, withLead } from "./paneStore";
+import { displacedNow, leadId, limitsAfter, makeRoom, moveEdge, relax, Sized, widthRule, withLead } from "./paneStore";
 
 /** The width rule onto a pane's element; the widths are applied imperatively (see Pane). */
 export const applyWidth = (el: HTMLElement, pane: { minWidth: number; width: number }, place: number) => {
@@ -37,7 +37,6 @@ export function useCascadeDrag() {
     start.current ??= measureRow(panes);
     const s = start.current;
     const made = makeRoom(s.open, shown.map((p) => p.id), id, target, s.free, lead, s.bar);
-    if (!made) return;
     s.made = made;
     const spacer = document.querySelector<HTMLElement>("[data-pane-lead]");
     if (spacer) spacer.style.width = `${made.widths[leadId] ?? lead}px`;
@@ -64,11 +63,7 @@ export function useCascadeDrag() {
       el.style.display = "";
       applyWidth(el, { minWidth: p.minWidth, width: p.width }, panes.indexOf(p));
     }
-    if (!s.made) return;
-    const before: Record<string, Displaced> = Object.fromEntries(
-      panes.map((p) => [p.id, { id: p.id, collapsed: p.collapsed, hidden: p.hidden, width: s.open.find((o) => o.id === p.id)?.width ?? p.width }]),
-    );
-    applyRoom(s.made, before);
+    if (s.made) applyRoom(s.made, displacedNow(panes, s.open));
   };
   return { preview, commit };
 }

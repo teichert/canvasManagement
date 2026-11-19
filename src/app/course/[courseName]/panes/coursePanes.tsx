@@ -42,9 +42,11 @@ export type PaneContext = {
 };
 
 /**
- * One entry per pane of a course, in their default order. The frame
- * renders them; the bars and the phone's row list them; the pane
+ * One entry per pane of a course, in the order the view menus list them.
+ * The frame renders them; the bars and the phone's row list them; the pane
  * store remembers what the user does with them. To add a pane, add an entry.
+ * The page starts as version 4's did: Help collapsed, Modules at its
+ * narrowest, the Calendar taking the rest; the others come when asked for.
  */
 export type CoursePane = {
   id: string;
@@ -55,6 +57,12 @@ export type CoursePane = {
   /** In px: how wide the pane is until a drag or All sets it; see widthRule. */
   defaultWidth?: number;
   collapsedByDefault?: () => boolean;
+  /** Not on the page until asked for (the end bars, a link, an item opening its Editor and Preview). */
+  offByDefault?: boolean;
+  /** Listed below the view menus' divider, off the icon stacks, until the user moves it. */
+  belowDivider?: boolean;
+  /** A link to this view opens it in its own window rather than a pane. */
+  popOut?: boolean;
   /** Memoized where it's expensive: the frame re-renders on every navigation. */
   Content: ComponentType<PaneContext>;
 };
@@ -93,14 +101,6 @@ const Modules = memo(function Modules({ courseName }: PaneContext) {
     </SuspenseAndErrorHandling>
   );
 }, sameCourse);
-
-/**
- * How narrow a pane may be made unless set otherwise: where the calendar's
- * week grid appears (--container-week in globals.css: 440px of the
- * calendar's box, measured inside its border) plus the bar, the gap and
- * that border, 26px in all, and a little to spare.
- */
-export const paneMinWidth = 468;
 
 /** A pane with nothing to show here says so instead. */
 export function PaneNote({ children }: { children: ReactNode }) {
@@ -141,6 +141,23 @@ function Compare({ moduleName, type, name }: { moduleName: string; type: string;
   return <ComparePageWithCanvas moduleName={moduleName} pageName={name} />;
 }
 
+/**
+ * How narrow a pane may be made unless set otherwise: wide enough for the
+ * calendar's week grid, which appears from --container-week (globals.css)
+ * of the calendar's box, measured inside its border: that, plus what a
+ * pane adds around the box (its bar, w-5; the row's gap, gap-0.5; the box's
+ * border, 2px a side), rem sizes at the page's root font size.
+ */
+export const paneMinWidth = () => {
+  const root = typeof document === "undefined" ? undefined : getComputedStyle(document.documentElement);
+  const rem = parseFloat(root?.fontSize ?? "") || 16;
+  const calendarWeek = parseFloat(root?.getPropertyValue("--container-week") ?? "") || 440;
+  const bar = 1.25 * rem;
+  const gap = 0.125 * rem;
+  const border = 2 * 2;
+  return Math.ceil(calendarWeek + bar + gap + border);
+};
+
 export const coursePanes: CoursePane[] = [
   {
     id: "help",
@@ -156,32 +173,24 @@ export const coursePanes: CoursePane[] = [
     ),
   },
   {
-    id: "home",
-    defaultWidth: 400,
-    label: "Home",
-    // the size of the other panes' icons (see ActionIcon), so it holds its own in the phone's row
-    icon: <HomeIcon className="size-[1.15em] shrink-0" />,
-    collapsedByDefault: () => true,
-    Content: Home,
+    id: "modules",
+    defaultWidth: paneMinWidth(),
+    label: "Modules",
+    icon: <ModulesIcon />,
+    Content: Modules,
   },
   {
     id: "calendar",
     // wide enough for the week grid with the day names spelled out (see --container-names)
-    defaultWidth: 800,
+    // the rest of the row (the row squeezes it to what is left; a drag sets it)
+    defaultWidth: 2000,
     label: "Calendar",
     icon: <CalendarIcon />,
     Content: Calendar,
   },
   {
-    id: "modules",
-    defaultWidth: 220,
-    label: "Modules",
-    icon: <ModulesIcon />,
-    collapsedByDefault: () => true,
-    Content: Modules,
-  },
-  {
     id: "editor",
+    offByDefault: true,
     defaultWidth: 300,
     label: "Editor",
     icon: <EditIcon />,
@@ -190,6 +199,7 @@ export const coursePanes: CoursePane[] = [
   },
   {
     id: "preview",
+    offByDefault: true,
     defaultWidth: 260,
     label: "Preview",
     icon: <PreviewIcon />,
@@ -197,7 +207,30 @@ export const coursePanes: CoursePane[] = [
     Content: Preview,
   },
   {
+    id: "settings",
+    popOut: true,
+    offByDefault: true,
+    defaultWidth: 700,
+    label: "Settings",
+    icon: <SettingsIcon />,
+    collapsedByDefault: () => true,
+    Content: memo(function Settings() {
+      return (
+        <SuspenseAndErrorHandling>
+          <div className="flex justify-center pt-3">
+            <div className="w-full max-w-3xl min-w-0 px-3 pb-12">
+              <AllSettings />
+            </div>
+          </div>
+        </SuspenseAndErrorHandling>
+      );
+    }),
+  },
+  {
     id: "compare",
+    popOut: true,
+    belowDivider: true,
+    offByDefault: true,
     defaultWidth: 500,
     label: "Compare with Canvas",
     icon: <CompareIcon />,
@@ -216,6 +249,8 @@ export const coursePanes: CoursePane[] = [
   },
   {
     id: "history",
+    belowDivider: true,
+    offByDefault: true,
     defaultWidth: 500,
     label: "File history",
     icon: <HistoryIcon />,
@@ -234,6 +269,9 @@ export const coursePanes: CoursePane[] = [
   },
   {
     id: "import",
+    popOut: true,
+    belowDivider: true,
+    offByDefault: true,
     defaultWidth: 700,
     label: "Import",
     icon: <ImportIcon />,
@@ -253,6 +291,9 @@ export const coursePanes: CoursePane[] = [
   },
   {
     id: "errors",
+    popOut: true,
+    belowDivider: true,
+    offByDefault: true,
     defaultWidth: 600,
     label: "Errors",
     icon: <WarningIcon />,
@@ -269,21 +310,14 @@ export const coursePanes: CoursePane[] = [
     }),
   },
   {
-    id: "settings",
-    defaultWidth: 700,
-    label: "Settings",
-    icon: <SettingsIcon />,
+    id: "home",
+    belowDivider: true,
+    offByDefault: true,
+    defaultWidth: 400,
+    label: "Home",
+    // the size of the other panes' icons (see ActionIcon), so it holds its own in the phone's row
+    icon: <HomeIcon className="size-[1.15em] shrink-0" />,
     collapsedByDefault: () => true,
-    Content: memo(function Settings() {
-      return (
-        <SuspenseAndErrorHandling>
-          <div className="flex justify-center pt-3">
-            <div className="w-full max-w-3xl min-w-0 px-3 pb-12">
-              <AllSettings />
-            </div>
-          </div>
-        </SuspenseAndErrorHandling>
-      );
-    }),
+    Content: Home,
   },
 ];
