@@ -94,6 +94,9 @@ const Modules = memo(function Modules({ courseName }: PaneContext) {
   );
 }, sameCourse);
 
+/** How narrow a pane may be made unless set otherwise: where the calendar's week grid appears (--container-week in globals.css). */
+export const paneMinWidth = 440;
+
 /** A pane with nothing to show here says so instead. */
 export function PaneNote({ children }: { children: ReactNode }) {
   return <p className="px-3 py-2 text-sm text-slate-500">{children}</p>;
