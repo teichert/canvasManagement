@@ -1,13 +1,13 @@
 "use client";
 import { CSSProperties, ReactNode, RefObject, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { usePaneRegistration, usePanes } from "./PaneStrip";
+import { previewWidths, usePaneRegistration, usePanes } from "./PaneStrip";
 import { MinRule } from "./PaneRules";
 import { HideButton, PaneBar, Side, useDragHandlers } from "./PaneBar";
 import { OnView, ViewChoice } from "./ViewIcons";
 import { useRouterState } from "@tanstack/react-router";
 import { isShown, viewOf } from "./paneStore";
-import { applyWidth, useCascadeDrag, useEdgeDrag } from "./useEdgeDrag";
+import { applyWidth, useRowDrag } from "./useEdgeDrag";
 import { paneElement } from "./measureRow";
 import { openPopOut } from "@/app/course/[courseName]/panes/popOut";
 
@@ -64,14 +64,14 @@ export function Pane({
   children: ReactNode;
 }) {
   usePaneRegistration({ id, label, icon, minWidth, defaultWidth, collapsedByDefault, hiddenByDefault, ssr });
-  const { panes, narrow, showing, flashing, setCollapsed, close, addPane, switchView, setLimits, grow, move, restoreDefaults } = usePanes();
-  const { dragEdge, endDrag } = useEdgeDrag();
-  const cascade = useCascadeDrag();
+  const { panes, narrow, showing, flashing, previewing, setCollapsed, close, addPane, switchView, setLimits, grow, move, restoreDefaults } = usePanes();
+  const rowDrag = useRowDrag();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const popOutHref = { pathname, pane: viewOf(id) };
   const place = panes.findIndex((p) => p.id === id);
   const view = panes[place];
-  const remembered = view?.collapsed ?? !ssr;
+  // while a drag shows what it would do, the pane is as the drag has it (see usePanes().preview)
+  const remembered = previewing ? previewing.collapsed.includes(id) : (view?.collapsed ?? !ssr);
   const selected = narrow && showing === id;
   const collapsed = narrow ? !selected : remembered;
   const toggle = () => setCollapsed(id, !remembered);
@@ -121,18 +121,23 @@ export function Pane({
   // the content is built the first time the pane is shown, then kept (scroll, state)
   const [built, setBuilt] = useState(!collapsed);
   if (!collapsed && !built) setBuilt(true);
-  const mounted = built && (keepMounted || !collapsed);
+  // kept while a drag shows the pane collapsed: dragging back opens it as it was
+  const mounted = built && (keepMounted || !collapsed || previewing !== null);
   const paneRef = useRef<HTMLDivElement | null>(null);
   // the widths are applied imperatively: React keeps server-rendered
   // attributes during hydration, so a style from the document wouldn't reach the DOM
-  const width = view?.width ?? defaultWidth;
-  const hidden = view?.hidden ?? false;
+  const width = previewWidths?.get(id) ?? view?.width ?? defaultWidth;
+  const stored = view?.hidden ?? false;
+  // off the page; one a drag shows leaving stays on it, out of sight (its bar may be the one held)
+  const hidden = stored && (!previewing || previewing.hidden.includes(id));
+  const leaving = !stored && !!previewing?.hidden.includes(id);
   // re-applied when the pane comes back from hidden (that's a new element) and after a drag (which lifted it out)
   const dragging = drag !== null;
-  useLayoutEffect(() => {
-    if (paneRef.current && !dragging) applyWidth(paneRef.current, { minWidth, width }, place);
-  }, [minWidth, width, place, hidden, dragging]);
+  // its narrowest is the one set (a drag from a square may have set it below the view's own)
   const effectiveMin = view?.minWidth ?? minWidth;
+  useLayoutEffect(() => {
+    if (paneRef.current && !dragging) applyWidth(paneRef.current, { minWidth: previewing ? 0 : effectiveMin, width }, place);
+  }, [effectiveMin, width, place, hidden, dragging, previewing]);
   const maxWidth = view?.maxWidth ?? Infinity;
   // the open panes on either side of this bar, for its resize square: the
   // nearest open pane before it and the nearest at or after it (this one
@@ -172,7 +177,7 @@ export function Pane({
       // the panes sit in the order the user dragged them into (CSS order,
       // so the frame's markup needn't move)
       // lifted out of the row while dragged (still in the DOM: the handle keeps the pointer)
-      style={{ order: place, ...(drag && { flex: "0 0 0px", width: 0, minWidth: 0, overflow: "hidden", visibility: "hidden" }) } as CSSProperties}
+      style={{ order: place, ...(leaving && { display: "none" }), ...(drag && { flex: "0 0 0px", width: 0, minWidth: 0, overflow: "hidden", visibility: "hidden" }) } as CSSProperties}
       className={
         "min-w-0 min-h-0 flex md:flex-row " +
         // narrow: every pane in the same grid cell, the unselected ones
@@ -206,8 +211,8 @@ export function Pane({
         onHide={hide}
         // the bar is the edge before this pane, and follows the pointer; from the square, the pane on
         // that side is the one whose limits yield
-        onDrag={(e, startX, side) => dragEdge(place, e.clientX - startX, sidePane(side)?.id)}
-        onDragEnd={endDrag}
+        onDrag={(e, startX, side) => rowDrag.edge(place, e.clientX - startX, sidePane(side)?.id)}
+        onDragEnd={rowDrag.end}
         // double-click on a half: that side's pane can't be made narrower than it is now
         onReset={(side) => {
           const pane = sidePane(side);
@@ -240,14 +245,12 @@ export function Pane({
             min={effectiveMin}
             label={label}
             // past the pane's width, the pane follows the box and the row shows the consequences live
-            // (see useCascadeDrag); on release the pane keeps that width and the row what it showed.
+            // (see useRowDrag); on release the pane keeps that width and the row what it showed.
             // A pane sitting at its narrowest follows the box back down too, giving the room back
-            onLive={(min) => {
-              if (min > width || width <= effectiveMin + 1) cascade.preview(id, Math.max(min, minWidth));
-            }}
+            onLive={(min) => (min > width || width <= effectiveMin + 1 ? rowDrag.resize(id, min) : width)}
             onMin={(min) => {
+              rowDrag.end();
               setLimits(id, { min });
-              cascade.commit();
             }}
           />
         )}

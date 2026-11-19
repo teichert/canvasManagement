@@ -12,7 +12,8 @@ import { useDragHandlers } from "./PaneBar";
  * The pane's narrowest width, as a rule under its name from the pane's left
  * edge as far as the minimum, ending in a short thick box. Drag the box to
  * set the minimum; dragged past the pane's width, the pane widens with it
- * (`onLive` as it goes, so the pane follows the box).
+ * (`onLive` as it goes, so the pane follows the box, saying how wide it
+ * got): the box never goes past the pane, nor under its bar.
  */
 export function MinRule({
   paneRef,
@@ -25,7 +26,7 @@ export function MinRule({
   min: number;
   label: string;
   onMin: (min: number) => void;
-  onLive?: (min: number) => void;
+  onLive?: (min: number) => number;
 }) {
   // measured, and followed as the pane is resized (a drag sets widths
   // without re-rendering): the bar's width (it's in rem), so the rule ends
@@ -47,13 +48,13 @@ export function MinRule({
   const [live, setLive] = useState<number | null>(null);
   const at = (e: React.PointerEvent) => {
     const left = paneRef.current?.getBoundingClientRect().left ?? 0;
-    return Math.round(Math.max(e.clientX - left, 0));
+    return Math.round(Math.max(e.clientX - left, bar));
   };
   const handlers = useDragHandlers(
     (e) => {
       const v = at(e);
-      setLive(v);
-      onLive?.(v);
+      // as far as the pane got: the row may not have that much room
+      setLive(Math.min(v, Math.round(onLive?.(v) ?? v)));
     },
     () => {
       if (live !== null) onMin(live);

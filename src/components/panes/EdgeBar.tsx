@@ -1,7 +1,7 @@
 "use client";
 import { useRouterState } from "@tanstack/react-router";
 import { usePanes } from "./PaneStrip";
-import { useEdgeDrag } from "./useEdgeDrag";
+import { useRowDrag } from "./useEdgeDrag";
 import { barClass, ResizeSquare, Side, useDragHandlers } from "./PaneBar";
 import { ViewChoice, ViewIcons } from "./ViewIcons";
 import { isShown } from "./paneStore";
@@ -22,7 +22,9 @@ import { openPopOut, popOutUrl } from "@/app/course/[courseName]/panes/popOut";
  */
 export function EdgeBar({ end, views }: { end: "start" | "end"; views: ViewChoice[] }) {
   const { panes, narrow, setLimits, addPane, showView, close, restoreDefaults } = usePanes();
-  const { dragEdge, endDrag } = useEdgeDrag();
+  const rowDrag = useRowDrag();
+  const dragEdge = rowDrag.edge;
+  const endDrag = rowDrag.end;
   const at = end === "start" ? 0 : panes.length;
   const handlers = useDragHandlers((e, x) => dragEdge(at, e.clientX - x), endDrag);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
