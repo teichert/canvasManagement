@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import path from "path";
 import { directoryOrFileExists } from "../utils/fileSystemUtils";
 import fs from "fs/promises";
@@ -49,6 +50,10 @@ const getItemFileNames = async ({
     .map((f) => f.replace(/\.md$/, ""));
 };
 
+/** A file that is gone is not an error of the app's (see isNotFound): it was deleted or renamed, by the app itself as often as not. */
+const notFound = ({ courseName, moduleName, name, type }: { courseName: string; moduleName: string; name: string; type: CourseItemType }, more = "") =>
+  new TRPCError({ code: "NOT_FOUND", message: `${type} "${name}" not found in module "${moduleName}" of course "${courseName}".${more}` });
+
 const getItem = async <T extends CourseItemType>({
   courseName,
   moduleName,
@@ -66,9 +71,7 @@ const getItem = async <T extends CourseItemType>({
   if (!(await directoryOrFileExists(filePath))) {
     const available = await getItemFileNames({ courseName, moduleName, type });
     const itemList = available.length > 0 ? available.join(", ") : "(none)";
-    throw new Error(
-      `${type} "${name}" not found in module "${moduleName}" of course "${courseName}". Available ${type.toLowerCase()}s: ${itemList}`,
-    );
+    throw notFound({ courseName, moduleName, name, type }, ` Available ${type.toLowerCase()}s: ${itemList}`);
   }
   const rawFile = (await fs.readFile(filePath, "utf-8")).replace(/\r\n/g, "\n");
   try {
@@ -244,7 +247,11 @@ export const courseItemFileStorageService = {
     type: CourseItemType;
   }): Promise<{ text: string; error?: string }> {
     const filePath = await itemFilePath(args);
-    const text = (await fs.readFile(filePath, "utf-8")).replace(/\r\n/g, "\n");
+    const text = (
+      await fs.readFile(filePath, "utf-8").catch((e) => {
+        throw e.code === "ENOENT" ? notFound(args) : e;
+      })
+    ).replace(/\r\n/g, "\n");
     try {
       await parseItemText(args.type, text, args.name, filePath);
       resolveError(fileErrorKey(filePath));

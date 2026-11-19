@@ -14,7 +14,8 @@ const handler = async (request: Request) => {
       console.error(
         `[tRPC ${error.code}] ${path ?? "unknown"} | input: ${JSON.stringify(input)} | ${error.message}`,
       );
-      if (!path?.startsWith("errorLog."))
+      // a file that is gone is not an error (see isNotFound)
+      if (!path?.startsWith("errorLog.") && error.code !== "NOT_FOUND")
         logError({ source: `Server request ${path ?? ""}`, message: error.message });
     },
   });

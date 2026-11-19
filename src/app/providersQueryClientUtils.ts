@@ -12,7 +12,7 @@ import {
   describeQueryKey,
   reportBrowserError,
 } from "@/features/local/errorLog/reportBrowserError";
-import { getErrorMessage } from "@/services/utils/queryClient";
+import { fileMissingEvent, getErrorMessage, isNotFound } from "@/services/utils/queryClient";
 
 /**
  * Every window of the app sees what any window learned: a save or a change
@@ -50,8 +50,10 @@ function makeQueryClient() {
   const client = new QueryClient({
     // every failed request lands in the error log, handled or not
     queryCache: new QueryCache({
-      onError: (error, query) =>
-        reportBrowserError(describeQueryKey(query.queryKey), getErrorMessage(error)),
+      onError: (error, query) => {
+        if (isNotFound(error)) window.dispatchEvent(new Event(fileMissingEvent));
+        else reportBrowserError(describeQueryKey(query.queryKey), getErrorMessage(error));
+      },
     }),
     mutationCache: new MutationCache({
       onError: (error, _variables, _context, mutation) =>

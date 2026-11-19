@@ -3,6 +3,16 @@ import { ReactNode } from "react";
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { TRPCError } from "@trpc/server";
 
+/**
+ * The request asked for a file that is gone (deleted or renamed, by the app
+ * itself as often as not, in this window or another): not an error to
+ * report; the window is told (fileMissingEvent) and an item page leaves the
+ * item for the course (see FollowNavigation).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const isNotFound = (error: any) => error?.data?.code === "NOT_FOUND" || error?.code === "NOT_FOUND";
+export const fileMissingEvent = "file-missing";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getErrorMessage(error: any) {
   if (error instanceof TRPCError) {
