@@ -128,8 +128,10 @@ export function MaxRule({ label, maxWidth, onMax }: { label: string; maxWidth: n
     const top = ref.current?.getBoundingClientRect().top ?? 0;
     return height > 0 ? Math.min(Math.max((e.clientY - top) / height, 0), 1) : 0;
   };
-  // the share back to a bound: the whole row (no bound) at the bottom of the rule
-  const maxFor = (share: number) => (share >= 0.98 ? undefined : Math.round(width + share * Math.max(room - width, 0)));
+  // the share back to a bound: from the width now at the top to the whole row at the bottom
+  const maxFor = (share: number) => Math.round(width + share * Math.max(room - width, 0));
+  // no widest width set: half the row
+  const bound = Number.isFinite(maxWidth) ? maxWidth : room / 2;
   const handlers = useDragHandlers(
     (e) => setLive(at(e)),
     () => {
@@ -137,26 +139,23 @@ export function MaxRule({ label, maxWidth, onMax }: { label: string; maxWidth: n
       setLive(null);
     },
   );
-  const share = live ?? maxRuleShare(maxWidth, width, room);
+  const share = live ?? maxRuleShare(bound, width, room);
   const length = share * height;
   const liveMax = live !== null ? maxFor(live) : undefined;
+  const says = (max: number) => (max >= room ? "the whole row" : `${Math.round(max)} px`);
   return (
     <div
       ref={ref}
       className="absolute right-0.5 w-1.5"
       style={{ top: box.top, height }}
       role="img"
-      aria-label={`Widest ${label}: ${Number.isFinite(maxWidth) ? `${Math.round(maxWidth)} px` : "the whole row"}`}
-      title={
-        Number.isFinite(maxWidth)
-          ? `${label} can't be made wider than ${Math.round(maxWidth)} px by dragging a bar (a drag from a resize square can, and moves this); the rule is how much wider it may still be made`
-          : `${label} may be made as wide as the row`
-      }
+      aria-label={`Widest ${label}: ${says(bound)}`}
+      title={`${label} can't be made wider than ${says(bound)}${Number.isFinite(maxWidth) ? "" : " (half the row, until set)"} by dragging a bar (a drag from a resize square can, and moves this); the rule is how much wider it may still be made`}
     >
       <div className="absolute top-0 right-0 w-px bg-slate-700" style={{ height: length }} />
       {live !== null && (
         <span className="absolute left-full ml-1 z-40 whitespace-nowrap rounded bg-gray-950/90 px-1 text-[10px] text-slate-300 pointer-events-none" style={{ top: length - 6 }}>
-          {liveMax === undefined ? "max width: the whole row" : `max width ${liveMax} px`}
+          max width {liveMax === undefined ? "" : says(liveMax)}
         </span>
       )}
       <div

@@ -51,7 +51,8 @@ export function useEdgeDrag() {
     const d = dragging.current;
     dragging.current = null;
     if (!d?.now) return;
-    const pane = panes.find((p) => p.id === d.relaxed);
+    // the pane's limits as the row sees them (no widest width set: half the row)
+    const pane = measureRow(panes).open.find((p) => p.id === d.relaxed);
     const width = d.relaxed ? d.now[d.relaxed] : undefined;
     setWidths(d.now, pane && width !== undefined ? { id: pane.id, ...limitsAfter(pane, width) } : undefined);
   };

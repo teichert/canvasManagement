@@ -3,7 +3,7 @@ import { CSSProperties, ReactNode, RefObject, useLayoutEffect, useRef, useState 
 import { createPortal } from "react-dom";
 import { usePaneRegistration, usePanes } from "./PaneStrip";
 import { MinRule } from "./PaneRules";
-import { HideButton, PaneBar, Side, useDragHandlers } from "./PaneBar";
+import { HideButton, PaneBar, Side } from "./PaneBar";
 import { OnView, ViewChoice } from "./ViewIcons";
 import { useRouterState } from "@tanstack/react-router";
 import { isShown, viewOf } from "./paneStore";
@@ -135,13 +135,9 @@ export function Pane({
   const leftPane = panes.slice(0, place).reverse().find(isShown);
   const rightPane = panes.slice(place).find(isShown);
   const sidePane = (side?: Side) => (side === "left" ? leftPane : side === "right" ? rightPane : undefined);
-  // the title drags the pane along the row as the name on the bar does; a click collapses the
-  // pane, after a pause long enough to tell it from a double-click, which grows or shrinks it
+  // a click on the title collapses the pane, after a pause long enough to tell it from a
+  // double-click, which grows or shrinks it
   const collapseTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const titleDrag = useDragHandlers(onMove, onMoveEnd, () => {
-    clearTimeout(collapseTimer.current);
-    collapseTimer.current = setTimeout(() => setCollapsed(id, true), 250);
-  });
 
   if (hidden) return null;
   return (
@@ -214,13 +210,16 @@ export function Pane({
         {!collapsed && (
           <div className="max-md:hidden flex-none flex flex-row items-center gap-2 border-b border-slate-800 text-xs font-semibold text-slate-300">
             <button
-              className="unstyled flex-1 min-w-0 truncate text-left !px-1 !py-1 hover:text-white touch-none cursor-move"
-              title={`Click: collapse ${label}. Double-click: as wide as it may be, the others giving way from the right; again: back to its narrowest, the others reopening. Drag: move it along the row, or out of the window into one of its own`}
+              className="unstyled flex-1 min-w-0 truncate text-left !px-1 !py-1 hover:text-white"
+              title={`Click: collapse ${label}. Double-click: as wide as it may be, the others giving way from the right; again: back to its narrowest, the others reopening`}
+              onClick={() => {
+                clearTimeout(collapseTimer.current);
+                collapseTimer.current = setTimeout(() => setCollapsed(id, true), 250);
+              }}
               onDoubleClick={() => {
                 clearTimeout(collapseTimer.current);
                 grow(id);
               }}
-              {...titleDrag}
             >
               {label}
             </button>

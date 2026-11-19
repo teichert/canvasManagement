@@ -123,7 +123,8 @@ function Half({
 /**
  * A pane's bar, on its left edge: under the resize square a menu of the
  * views (a pick gives the pane that view, see Pane), then its name along
- * it, bottom-up. A click
+ * it, bottom-up, and a grip under the name that drags the pane along the
+ * row. A click
  * collapses or expands the pane; a drag moves the edge within every pane's
  * limits (the caller says what that resizes; it gets where the drag
  * started); the resize square at the top resizes one pane past its limits,
@@ -174,7 +175,7 @@ export function PaneBar({
   onReset: (side: Side) => void;
 }) {
   const handlers = useDragHandlers((e, x) => onDrag(e, x), onDragEnd, onToggle);
-  const nameHandlers = useDragHandlers(onMove, onMoveEnd, onToggle);
+  const gripHandlers = useDragHandlers(onMove, onMoveEnd, onToggle);
   return (
     <div
       role="button"
@@ -212,19 +213,14 @@ export function PaneBar({
           extras={closeActions}
         />
       )}
+      <span className="[writing-mode:vertical-rl] rotate-180 whitespace-nowrap hover:text-white">{label}</span>
+      {/* the grip under the name is the handle to move the pane by */}
       <span
-        className="[writing-mode:vertical-rl] rotate-180 whitespace-nowrap touch-none cursor-move hover:text-white"
-        title={`Drag: move ${label} along the row, or out of the window into one of its own`}
-        {...nameHandlers}
-      >
-        {label}
-      </span>
-      {/* a grip under the name: the name is the handle to move the pane by */}
-      <span
-        aria-hidden
+        role="button"
+        aria-label={`Move ${label}`}
         className="select-none touch-none cursor-move leading-none text-slate-500 hover:text-slate-200"
         title={`Drag: move ${label} along the row, or out of the window into one of its own`}
-        {...nameHandlers}
+        {...gripHandlers}
       >
         ⋮⋮
       </span>

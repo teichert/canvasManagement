@@ -50,7 +50,7 @@ export type PaneSpec = {
  * A pane as the page shows it: its spec with the user's choices applied;
  * `width` is how wide it is (dragged, set by All, or its default),
  * `minWidth` and `maxWidth` the narrowest and widest it may be made
- * (`maxWidth` Infinity when none is set), `floor` the pane's own minimum,
+ * (`maxWidth` Infinity when none is set: half the row, see measureRow), `floor` the pane's own minimum,
  * the min until a drag from a resize square pushes it lower.
  */
 export type PaneView = PaneSpec & { hidden: boolean; collapsed: boolean; width: number; maxWidth: number; floor: number };

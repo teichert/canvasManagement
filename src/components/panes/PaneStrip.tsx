@@ -253,7 +253,7 @@ export function usePanes() {
       const pane = panes.find((p) => p.id === id);
       const now = r?.open.find((p) => p.id === id);
       if (!r || !pane || !now) return;
-      const target = Math.min(pane.maxWidth, r.room);
+      const target = Math.min(now.maxWidth, r.room);
       const { widths, collapse, short } = fitOpening(r.open, id, target - now.width, r.free, r.bar);
       const hide: string[] = [];
       let left = short;
