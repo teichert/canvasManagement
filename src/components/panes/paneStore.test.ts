@@ -212,17 +212,22 @@ describe("a cascade making room (the title's double-click, the narrowest box dra
   const open = [p("a", 300), p("b", 300), p("c", 300)];
   it("narrows the others to their narrowest, then collapses, then hides, from the right, and says what the pane gets", () => {
     // 900 wide row of three 300s with no empty room; a wants 700: b and c narrowing to 100 finds the 400
-    const made = makeRoom(open, ["a", "b", "c"], "a", 700, 0, 23);
+    const made = makeRoom(open, ["a", "b", "c"], "a", 700, 0, 0, 23);
     expect(made?.collapse).toEqual([]);
     expect(made?.hide).toEqual([]);
     expect(made?.widths.a).toBe(700);
   });
   it("hides panes from the right when collapsing everything is not enough", () => {
     // a wants 880: narrowing finds 400, collapsing c then b 77 each, and hiding c then b their bars
-    const made = makeRoom(open, ["a", "b", "c"], "a", 880, 0, 23);
+    const made = makeRoom(open, ["a", "b", "c"], "a", 880, 0, 0, 23);
     expect(made?.collapse).toEqual(["c", "b"]);
     expect(made?.hide).toEqual(["c", "b"]);
     expect(made?.widths.a).toBe(880);
+  });
+  it("uses the empty room before the first pane first, and gives the rest back to the row", () => {
+    const made = makeRoom(open, ["a", "b", "c"], "a", 500, 50, 300, 23);
+    expect(made?.widths).toEqual({ a: 500, b: 300, c: 300, [leadId]: 150 });
+    expect(made?.collapse).toEqual([]);
   });
   it("remembers what it displaced, as it was, and puts the last one back", () => {
     const before = { b: { id: "b", collapsed: false, hidden: false, width: 300 }, c: { id: "c", collapsed: false, hidden: false, width: 300 } };

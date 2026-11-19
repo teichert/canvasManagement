@@ -123,8 +123,7 @@ function Half({
 /**
  * A pane's bar, on its left edge: under the resize square a menu of the
  * views (a pick gives the pane that view, see Pane), then its name along
- * it, bottom-up, and a grip under the name that drags the pane along the
- * row. A click
+ * it, bottom-up, and a grip under the name as a hint. A click
  * collapses or expands the pane; a drag moves the edge within every pane's
  * limits (the caller says what that resizes; it gets where the drag
  * started); the resize square at the top resizes one pane past its limits,
@@ -174,15 +173,31 @@ export function PaneBar({
   onDragEnd: () => void;
   onReset: (side: Side) => void;
 }) {
-  const handlers = useDragHandlers((e, x) => onDrag(e, x), onDragEnd, onToggle);
-  const gripHandlers = useDragHandlers(onMove, onMoveEnd, onToggle);
+  // anywhere on the bar, the name and the grip included: a plain drag moves this edge; with
+  // Ctrl or Shift held when the drag starts, it moves the pane along the row (and out of
+  // the window: Ctrl into a new tab, Shift into a new window, as those keys do on a link)
+  const mode = useRef<"resize" | "move" | null>(null);
+  const handlers = useDragHandlers(
+    (e, x) => {
+      mode.current ??= e.ctrlKey || e.metaKey || e.shiftKey ? "move" : "resize";
+      if (mode.current === "move") onMove(e);
+      else onDrag(e, x);
+    },
+    (e) => {
+      const was = mode.current;
+      mode.current = null;
+      if (was === "move") onMoveEnd(e);
+      else onDragEnd();
+    },
+    onToggle,
+  );
   return (
     <div
       role="button"
       tabIndex={0}
       aria-expanded={!collapsed}
       aria-label={collapsed ? `Show ${label}` : `Collapse ${label}`}
-      title={(collapsed ? `Show ${label}` : `Collapse ${label}`) + "; drag to move this edge within the panes' limits (the square goes past them)"}
+      title={(collapsed ? `Show ${label}` : `Collapse ${label}`) + `. Drag: move this edge within the panes' limits (the square goes past them). Ctrl+drag: move ${label} along the row, or out of the window into a new tab; Shift+drag: the same, into a new window`}
       className={
         barClass +
         "touch-none cursor-col-resize " +
@@ -214,14 +229,8 @@ export function PaneBar({
         />
       )}
       <span className="[writing-mode:vertical-rl] rotate-180 whitespace-nowrap hover:text-white">{label}</span>
-      {/* the grip under the name is the handle to move the pane by */}
-      <span
-        role="button"
-        aria-label={`Move ${label}`}
-        className="select-none touch-none cursor-move leading-none text-slate-500 hover:text-slate-200"
-        title={`Drag: move ${label} along the row, or out of the window into one of its own`}
-        {...gripHandlers}
-      >
+      {/* a grip under the name: a hint that the bar drags, as the whole bar does */}
+      <span aria-hidden className="select-none leading-none text-slate-500">
         ⋮⋮
       </span>
       {collapsed && (

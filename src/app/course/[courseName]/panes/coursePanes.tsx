@@ -94,8 +94,13 @@ const Modules = memo(function Modules({ courseName }: PaneContext) {
   );
 }, sameCourse);
 
-/** How narrow a pane may be made unless set otherwise: where the calendar's week grid appears (--container-week in globals.css). */
-export const paneMinWidth = 440;
+/**
+ * How narrow a pane may be made unless set otherwise: where the calendar's
+ * week grid appears (--container-week in globals.css: 440px of the
+ * calendar's box, measured inside its border) plus the bar, the gap and
+ * that border, 26px in all, and a little to spare.
+ */
+export const paneMinWidth = 468;
 
 /** A pane with nothing to show here says so instead. */
 export function PaneNote({ children }: { children: ReactNode }) {

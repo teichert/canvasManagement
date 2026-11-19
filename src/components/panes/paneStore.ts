@@ -214,16 +214,18 @@ export function fitOpening(open: Sized[], id: string, need: number, free: number
 
 /**
  * Room for the pane `id` to be `target` wide, as fitOpening makes it (the
- * empty room, then the others down to their narrowest, those after it
+ * empty room at both ends of the row, then the others down to their narrowest, those after it
  * first, then open panes collapsed from the right) and then, still short,
  * panes hidden from the right, their bars' room included; the width the
  * pane ends up with, and what gave way. The title's double-click and the
  * narrowest-width box dragged past the pane's width both do this.
  */
-export function makeRoom(open: Sized[], ids: string[], id: string, target: number, free: number, bar: number) {
+export function makeRoom(open: Sized[], ids: string[], id: string, target: number, free: number, lead: number, bar: number) {
   const now = open.find((p) => p.id === id);
   if (!now) return undefined;
-  const { widths, collapse, short } = fitOpening(open, id, target - now.width, free, bar);
+  // the empty room at either end goes first: the lead's share of it is given back to the row
+  const { widths, collapse, short } = fitOpening(open, id, target - now.width, free + lead, bar);
+  widths[leadId] = lead - Math.max(Math.min(Math.max(target - now.width, 0), free + lead) - free, 0);
   const hide: string[] = [];
   let left = short;
   for (const other of [...ids].reverse()) {

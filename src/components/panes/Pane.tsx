@@ -3,7 +3,7 @@ import { CSSProperties, ReactNode, RefObject, useLayoutEffect, useRef, useState 
 import { createPortal } from "react-dom";
 import { usePaneRegistration, usePanes } from "./PaneStrip";
 import { MinRule } from "./PaneRules";
-import { HideButton, PaneBar, Side } from "./PaneBar";
+import { HideButton, PaneBar, Side, useDragHandlers } from "./PaneBar";
 import { OnView, ViewChoice } from "./ViewIcons";
 import { useRouterState } from "@tanstack/react-router";
 import { isShown, viewOf } from "./paneStore";
@@ -81,7 +81,7 @@ export function Pane({
   // a drag of the pane (its name, its menu icon or its title): the pane leaves the row for
   // the drag, a marker shows where it would land, a label by the pointer says what a drop
   // does; outside the window, the pane goes into a window of its own
-  const [drag, setDrag] = useState<{ x: number; y: number; index: number; out: boolean; markerX: number; rowTop: number; rowHeight: number } | null>(null);
+  const [drag, setDrag] = useState<{ x: number; y: number; index: number; out: boolean; window: boolean; markerX: number; rowTop: number; rowHeight: number } | null>(null);
   const outside = (e: React.PointerEvent) => e.clientX < 0 || e.clientY < 0 || e.clientX > window.innerWidth || e.clientY > window.innerHeight;
   /** Where the pane would land: before the first other pane whose middle the pointer is left of, else last; and the marker's x. */
   const dropAt = (clientX: number) => {
@@ -101,16 +101,17 @@ export function Pane({
     const among = panes.filter((p) => p.id !== id);
     return { index: index < rest.length ? among.indexOf(rest[index]) : among.length, markerX };
   };
-  const onMove = (e: React.PointerEvent) => {
+  const onMove = (e: React.PointerEvent, asWindow = false) => {
     const row = paneRef.current?.parentElement?.getBoundingClientRect();
-    setDrag({ x: e.clientX, y: e.clientY, out: outside(e), ...dropAt(e.clientX), rowTop: row?.top ?? 0, rowHeight: row?.height ?? 0 });
+    // Shift from the start of the drag (or a drag of the title) means a new window when dropped outside; Ctrl a new tab
+    setDrag({ x: e.clientX, y: e.clientY, out: outside(e), window: drag?.window ?? (asWindow || e.shiftKey), ...dropAt(e.clientX), rowTop: row?.top ?? 0, rowHeight: row?.height ?? 0 });
   };
   const onMoveEnd = (e: React.PointerEvent) => {
     const d = drag;
     setDrag(null);
     if (outside(e)) {
       hide();
-      openPopOut(pathname, viewOf(id));
+      openPopOut(pathname, viewOf(id), d?.window ?? e.shiftKey);
     } else if (d && d.index !== place) move(id, d.index);
   };
   // the content is built the first time the pane is shown, then kept (scroll, state)
@@ -136,8 +137,13 @@ export function Pane({
   const rightPane = panes.slice(place).find(isShown);
   const sidePane = (side?: Side) => (side === "left" ? leftPane : side === "right" ? rightPane : undefined);
   // a click on the title collapses the pane, after a pause long enough to tell it from a
-  // double-click, which grows or shrinks it
+  // double-click, which grows or shrinks it; a drag of the title moves the pane (outside
+  // the window: into a new window)
   const collapseTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const titleDrag = useDragHandlers((e) => onMove(e, true), onMoveEnd, () => {
+    clearTimeout(collapseTimer.current);
+    collapseTimer.current = setTimeout(() => setCollapsed(id, true), 250);
+  });
 
   if (hidden) return null;
   return (
@@ -152,7 +158,7 @@ export function Pane({
             style={{ left: Math.min(Math.max(drag.x, 0), window.innerWidth - 220) + 12, top: Math.min(Math.max(drag.y, 0), window.innerHeight - 40) + 12 }}
           >
             {icon}
-            {drag.out ? `Drop: ${label} in a window of its own` : `Drop: ${label} here`}
+            {drag.out ? `Drop: ${label} in a new ${drag.window ? "window" : "tab"}` : `Drop: ${label} here`}
           </div>
         </>,
         document.body,
@@ -210,12 +216,9 @@ export function Pane({
         {!collapsed && (
           <div className="max-md:hidden flex-none flex flex-row items-center gap-2 border-b border-slate-800 text-xs font-semibold text-slate-300">
             <button
-              className="unstyled flex-1 min-w-0 truncate text-left !px-1 !py-1 hover:text-white"
-              title={`Click: collapse ${label}. Double-click: as wide as it may be, the others giving way from the right; again: back to its narrowest, the others reopening`}
-              onClick={() => {
-                clearTimeout(collapseTimer.current);
-                collapseTimer.current = setTimeout(() => setCollapsed(id, true), 250);
-              }}
+              className="unstyled flex-1 min-w-0 truncate text-left !px-1 !py-1 hover:text-white touch-none cursor-move"
+              title={`Click: collapse ${label}. Double-click: as wide as it may be, the others giving way from the right; again: back to its narrowest, the others reopening. Drag: move it along the row, or out of the window into a new window`}
+              {...titleDrag}
               onDoubleClick={() => {
                 clearTimeout(collapseTimer.current);
                 grow(id);

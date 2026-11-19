@@ -24,6 +24,7 @@ import { measureRow, Row } from "./measureRow";
 import {
   fitOpening,
   isShown,
+  leadId,
   makeRoom,
   paneActions,
   PaneDoc,
@@ -43,7 +44,7 @@ import {
  * their narrowest, those after it first, then open panes closed from the
  * right. On a phone, or without a row to measure, simply shown.
  */
-function openWithRoom(doc: PaneDoc, panes: PaneView[], row: Row | undefined, id: string): PaneDoc {
+function openWithRoom(doc: PaneDoc, panes: PaneView[], row: Row | undefined, id: string, lead = 0): PaneDoc {
   const pane = panes.find((p) => p.id === id);
   // already open: nothing to make room for
   if (!pane || !row || isShown(pane)) return paneActions.show(doc, id);
@@ -53,7 +54,9 @@ function openWithRoom(doc: PaneDoc, panes: PaneView[], row: Row | undefined, id:
     .map((p) => ({ id: p.id, width: p.id === id ? Math.max(p.width, p.minWidth) : measured[p.id], minWidth: p.minWidth, maxWidth: p.maxWidth }));
   // a hidden pane has no bar on the page yet: it needs its bar's room too
   const need = Math.max(pane.width, pane.minWidth) - (pane.hidden ? 0 : row.bar);
-  const { widths, collapse } = fitOpening(opening, id, need, row.free, row.bar);
+  // the empty room at either end of the row goes first
+  const { widths, collapse } = fitOpening(opening, id, need, row.free + lead, row.bar);
+  widths[leadId] = lead - Math.max(Math.min(Math.max(need, 0), row.free + lead) - row.free, 0);
   return paneActions.show(
     collapse.reduce((d, other) => paneActions.setCollapsed(d, other, true), paneActions.setWidths(doc, widths)),
     id,
@@ -131,6 +134,7 @@ export function PaneStrip({
   const hydrated = useSyncExternalStore(subscribeToNothing, () => true, () => false);
   const narrow = useSyncExternalStore(subscribeToWidth, () => window.matchMedia(narrowQuery).matches, () => false);
   const panes = viewPanes(specs, parseDoc(json), hydrated);
+  const lead = parseDoc(json).lead ?? 0;
   const [flashing, setFlashing] = useState<string>();
   const flash = useCallback((id: string) => setFlashing(id), []);
   // timed from when the outline is on screen: a pane's first render can take a while
@@ -160,7 +164,7 @@ export function PaneStrip({
       }
       const pane = panes.find((p) => viewOf(p.id) === view && !p.hidden);
       if (!pane) return update((d) => paneActions.add(d, panes.map((p) => p.id), view));
-      update((d) => openWithRoom(d, panes, narrow ? undefined : measureRow(panes), pane.id));
+      update((d) => openWithRoom(d, panes, narrow ? undefined : measureRow(panes), pane.id, lead));
     });
     return () => {
       opener = undefined;
@@ -188,7 +192,7 @@ export function PaneStrip({
         panes,
         narrow,
         showing: showingPane(panes),
-        lead: parseDoc(json).lead ?? 0,
+        lead,
         added: parseDoc(json).added ?? [],
         views: parseDoc(json).views ?? {},
         flashing,
@@ -250,7 +254,7 @@ export function usePanes() {
       if (narrow) update((d) => paneActions.jumpTo(added(d), [...ids, id], id));
       else if (!pane || !isShown(pane)) {
         const r = row();
-        update((d) => (pane ? openWithRoom(d, panes, r, id) : added(d)));
+        update((d) => (pane ? openWithRoom(d, panes, r, id, lead) : added(d)));
       }
       flash(id);
     },
@@ -263,7 +267,7 @@ export function usePanes() {
     widen: (id: string, target: number) => {
       const r = row();
       if (!r) return;
-      const made = makeRoom(r.open, panes.filter((p) => !p.hidden).map((p) => p.id), id, target, r.free, r.bar);
+      const made = makeRoom(r.open, panes.filter((p) => !p.hidden).map((p) => p.id), id, target, r.free, lead, r.bar);
       if (!made) return;
       const before = Object.fromEntries(panes.map((p) => [p.id, { id: p.id, collapsed: p.collapsed, hidden: p.hidden, width: r.open.find((o) => o.id === p.id)?.width ?? p.width }]));
       update((d) => paneActions.makeRoom(d, made, before));
@@ -279,7 +283,7 @@ export function usePanes() {
       const now = r?.open.find((p) => p.id === id);
       if (!r || !pane || !now) return;
       const target = Math.min(now.maxWidth, r.room);
-      const made = makeRoom(r.open, panes.filter((p) => !p.hidden).map((p) => p.id), id, target, r.free, r.bar);
+      const made = makeRoom(r.open, panes.filter((p) => !p.hidden).map((p) => p.id), id, target, r.free, lead, r.bar);
       // growing would change nothing: it is as wide as it may be, so back to its narrowest instead
       if (!made || made.widths[id] - now.width < 2) return update((d) => paneActions.setWidths(d, { [id]: pane.minWidth }));
       const before = Object.fromEntries(panes.map((p) => [p.id, { id: p.id, collapsed: p.collapsed, hidden: p.hidden, width: r.open.find((o) => o.id === p.id)?.width ?? p.width }]));
@@ -293,7 +297,7 @@ export function usePanes() {
     setCollapsed: (id: string, collapsed: boolean) => {
       if (collapsed || narrow) return update((d) => paneActions.setCollapsed(paneActions.forget(frozen(d), [id]), id, collapsed));
       const r = row();
-      update((d) => openWithRoom(d, panes, r, id));
+      update((d) => openWithRoom(d, panes, r, id, lead));
     },
     /** The narrowest and widest the pane may be made; undefined forgets one. */
     setLimits: (id: string, limits: { min?: number; max?: number }) => update((d) => paneActions.setLimits(d, id, limits)),
