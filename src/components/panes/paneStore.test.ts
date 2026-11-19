@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fitOpening, leadId, limitsAfter, maxRuleShare, moveEdge, withLead, movePane, paneActions, PaneSpec, parseDoc, relax, showingPane, viewOf, viewPanes, widthRule } from "./paneStore";
+import { fitOpening, leadId, limitsAfter, makeRoom, maxRuleShare, moveEdge, withLead, movePane, paneActions, PaneSpec, parseDoc, relax, showingPane, viewOf, viewPanes, widthRule } from "./paneStore";
 
 const spec = (id: string, extra: Partial<PaneSpec> = {}): PaneSpec => ({
   id,
@@ -204,5 +204,34 @@ describe("closing panes in bulk", () => {
   it("hides catalogue panes and removes copies, as × does", () => {
     const doc = paneActions.close({ added: ["editor#2"], panes: { "editor#2": { width: 1 } } }, ["calendar", "editor#2"]);
     expect(doc).toEqual({ added: [], order: undefined, panes: { calendar: { hidden: true } } });
+  });
+});
+
+describe("a cascade making room (the title's double-click, the narrowest box dragged past the width)", () => {
+  const p = (id: string, width: number, minWidth = 100) => ({ id, width, minWidth, maxWidth: Infinity });
+  const open = [p("a", 300), p("b", 300), p("c", 300)];
+  it("narrows the others to their narrowest, then collapses, then hides, from the right, and says what the pane gets", () => {
+    // 900 wide row of three 300s with no empty room; a wants 700: b and c narrowing to 100 finds the 400
+    const made = makeRoom(open, ["a", "b", "c"], "a", 700, 0, 23);
+    expect(made?.collapse).toEqual([]);
+    expect(made?.hide).toEqual([]);
+    expect(made?.widths.a).toBe(700);
+  });
+  it("hides panes from the right when collapsing everything is not enough", () => {
+    // a wants 880: narrowing finds 400, collapsing c then b 77 each, and hiding c then b their bars
+    const made = makeRoom(open, ["a", "b", "c"], "a", 880, 0, 23);
+    expect(made?.collapse).toEqual(["c", "b"]);
+    expect(made?.hide).toEqual(["c", "b"]);
+    expect(made?.widths.a).toBe(880);
+  });
+  it("remembers what it displaced, as it was, and puts the last one back", () => {
+    const before = { b: { id: "b", collapsed: false, hidden: false, width: 300 }, c: { id: "c", collapsed: false, hidden: false, width: 300 } };
+    const doc = paneActions.makeRoom({}, { widths: { a: 700 }, collapse: ["c", "b"], hide: ["c"] }, before);
+    expect(doc.panes?.c).toEqual({ collapsed: true, hidden: true });
+    expect(doc.displaced?.map((d) => d.id)).toEqual(["c", "b", "c"]);
+    const back = paneActions.restore(doc, doc.displaced!.at(-1)!);
+    expect(back.panes?.c).toEqual({ collapsed: false, hidden: false, width: 300 });
+    expect(back.displaced?.map((d) => d.id)).toEqual(["b"]);
+    expect(paneActions.forget(doc, ["b"]).displaced?.map((d) => d.id)).toEqual(["c", "c"]);
   });
 });

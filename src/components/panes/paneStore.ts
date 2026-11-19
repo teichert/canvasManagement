@@ -19,7 +19,10 @@ export type PaneDoc = {
   added?: string[];
   /** The views as the menus and icon stacks list them: their order, and those kept below the menus' divider, off the stacks. */
   views?: { order?: string[]; hidden?: string[] };
+  /** Panes a cascade (see makeRoom) collapsed or hid to make room, as they were, last first: put back as room returns (see PaneStrip). */
+  displaced?: Displaced[];
 };
+export type Displaced = { id: string; collapsed: boolean; hidden: boolean; width: number };
 export const paneDocKey = "panes";
 
 export function parseDoc(json: string | null): PaneDoc {
@@ -210,6 +213,30 @@ export function fitOpening(open: Sized[], id: string, need: number, free: number
 }
 
 /**
+ * Room for the pane `id` to be `target` wide, as fitOpening makes it (the
+ * empty room, then the others down to their narrowest, those after it
+ * first, then open panes collapsed from the right) and then, still short,
+ * panes hidden from the right, their bars' room included; the width the
+ * pane ends up with, and what gave way. The title's double-click and the
+ * narrowest-width box dragged past the pane's width both do this.
+ */
+export function makeRoom(open: Sized[], ids: string[], id: string, target: number, free: number, bar: number) {
+  const now = open.find((p) => p.id === id);
+  if (!now) return undefined;
+  const { widths, collapse, short } = fitOpening(open, id, target - now.width, free, bar);
+  const hide: string[] = [];
+  let left = short;
+  for (const other of [...ids].reverse()) {
+    if (left <= 0) break;
+    if (other === id) continue;
+    hide.push(other);
+    left -= bar;
+  }
+  widths[id] = target - Math.max(left, 0);
+  return { widths, collapse, hide };
+}
+
+/**
  * The max rule (see PaneRules): how much wider the pane may still be made,
  * as the share of the rule's length from the top, of what the row would
  * allow: nothing when the pane is as wide as it may be, the whole rule when
@@ -257,6 +284,35 @@ export const paneActions = {
   setPinned: (doc: PaneDoc, key: string, pinned: boolean) => ({ ...doc, pins: { ...doc.pins, [key]: pinned } }),
   /** The views' order in the menus, and which are kept below the divider. */
   setViews: (doc: PaneDoc, order: string[], hidden: string[]): PaneDoc => ({ ...doc, views: { order, hidden } }),
+  /**
+   * What makeRoom decided, applied: the widths, the panes collapsed and the
+   * panes hidden, each of those remembered as it was (`before`) so it can
+   * be put back when room returns.
+   */
+  makeRoom: (
+    doc: PaneDoc,
+    room: { widths: Record<string, number>; collapse: string[]; hide: string[] },
+    before: Record<string, Displaced>,
+  ): PaneDoc => {
+    const displaced = [...(doc.displaced ?? []).filter((d) => !room.collapse.includes(d.id) && !room.hide.includes(d.id))];
+    let next = paneActions.setWidths(doc, room.widths);
+    for (const id of room.collapse) {
+      next = withPane(next, id, { collapsed: true });
+      displaced.push(before[id]);
+    }
+    for (const id of room.hide) {
+      next = withPane(next, id, { hidden: true });
+      displaced.push(before[id]);
+    }
+    return { ...next, displaced };
+  },
+  /** The last pane a cascade displaced, put back as it was. */
+  restore: (doc: PaneDoc, entry: Displaced): PaneDoc => ({
+    ...withPane(doc, entry.id, { collapsed: entry.collapsed, hidden: entry.hidden, width: entry.width }),
+    displaced: (doc.displaced ?? []).filter((d) => d !== entry && d.id !== entry.id),
+  }),
+  /** A pane the user collapsed or closed on purpose is not put back by a cascade's undo. */
+  forget: (doc: PaneDoc, ids: string[]): PaneDoc => ({ ...doc, displaced: (doc.displaced ?? []).filter((d) => !ids.includes(d.id)) }),
   /** Another pane of `view` (its lowest free number), open, at `index` in the row (none: at the end). */
   add: (doc: PaneDoc, ids: string[], view: string, index?: number): PaneDoc => {
     const id = freeId(ids, view);

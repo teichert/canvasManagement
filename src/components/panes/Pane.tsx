@@ -61,7 +61,7 @@ export function Pane({
   children: ReactNode;
 }) {
   usePaneRegistration({ id, label, icon, minWidth, defaultWidth, collapsedByDefault, ssr });
-  const { panes, narrow, showing, flashing, setCollapsed, close, addPane, switchView, setLimits, setWidths, grow, move } = usePanes();
+  const { panes, narrow, showing, flashing, setCollapsed, close, addPane, switchView, setLimits, widen, grow, move } = usePanes();
   const { dragEdge, endDrag } = useEdgeDrag();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const popOutHref = { pathname, pane: viewOf(id) };
@@ -237,7 +237,7 @@ export function Pane({
             }}
             onMin={(min) => {
               setLimits(id, { min });
-              if (min > width) setWidths({ [id]: min });
+              if (min > width) widen(id, min);
             }}
           />
         )}

@@ -24,6 +24,7 @@ import { measureRow, Row } from "./measureRow";
 import {
   fitOpening,
   isShown,
+  makeRoom,
   paneActions,
   PaneDoc,
   paneDocKey,
@@ -169,6 +170,18 @@ export function PaneStrip({
   useEffect(() => {
     document.documentElement.dataset.panesReady = "true";
   }, []);
+  // what a cascade displaced comes back, last first, as the room allows: after
+  // every change to the layout, the last entry is put back if it fits now
+  useLayoutEffect(() => {
+    const entry = parseDoc(json).displaced?.at(-1);
+    if (!entry || narrow || !hydrated) return;
+    const pane = panes.find((p) => p.id === entry.id);
+    if (!pane) return update((d) => paneActions.restore(d, entry));
+    const r = measureRow(panes);
+    const has = pane.hidden ? 0 : pane.collapsed ? r.bar : r.open.find((o) => o.id === pane.id)?.width ?? pane.width;
+    const wants = entry.hidden ? 0 : entry.collapsed ? r.bar : Math.max(entry.width, pane.minWidth);
+    if (wants - has <= r.free + 1) update((d) => paneActions.restore(d, entry));
+  });
   return (
     <StripContext.Provider
       value={{
@@ -242,11 +255,23 @@ export function usePanes() {
       flash(id);
     },
     /**
-     * The pane as wide as its widest width (the row, with none) allows: the
-     * others narrow to their narrowest, then collapse, then close, from the
-     * right (see fitOpening), as far as needed. Already that wide: back to
-     * its narrowest, the collapsed panes reopening at their narrowest, in
-     * row order, as far as the room freed allows.
+     * The pane `target` wide, room made by the cascade (see makeRoom): the
+     * others narrow to their narrowest, then collapse, then hide, from the
+     * right, as far as needed; what gave way is remembered and comes back as
+     * room returns.
+     */
+    widen: (id: string, target: number) => {
+      const r = row();
+      if (!r) return;
+      const made = makeRoom(r.open, panes.filter((p) => !p.hidden).map((p) => p.id), id, target, r.free, r.bar);
+      if (!made) return;
+      const before = Object.fromEntries(panes.map((p) => [p.id, { id: p.id, collapsed: p.collapsed, hidden: p.hidden, width: r.open.find((o) => o.id === p.id)?.width ?? p.width }]));
+      update((d) => paneActions.makeRoom(d, made, before));
+    },
+    /**
+     * The pane as wide as its widest width (the row, with none) allows, by
+     * the cascade (see widen). Already that wide: back to its narrowest,
+     * and what the cascade displaced comes back as the room allows.
      */
     grow: (id: string) => {
       const r = row();
@@ -254,39 +279,19 @@ export function usePanes() {
       const now = r?.open.find((p) => p.id === id);
       if (!r || !pane || !now) return;
       const target = Math.min(now.maxWidth, r.room);
-      const { widths, collapse, short } = fitOpening(r.open, id, target - now.width, r.free, r.bar);
-      const hide: string[] = [];
-      let left = short;
-      for (const p of [...panes].reverse()) {
-        if (left <= 0) break;
-        if (p.id === id || p.hidden) continue;
-        hide.push(p.id);
-        left -= r.bar;
-      }
-      const grown = target - Math.max(left, 0);
+      const made = makeRoom(r.open, panes.filter((p) => !p.hidden).map((p) => p.id), id, target, r.free, r.bar);
       // growing would change nothing: it is as wide as it may be, so back to its narrowest instead
-      if (grown - now.width < 2) {
-        const widths: Record<string, number> = { [id]: pane.minWidth };
-        let freed = now.width - pane.minWidth;
-        const reopen: string[] = [];
-        for (const p of panes) {
-          if (p.id === id || p.hidden || !p.collapsed || p.minWidth - r.bar > freed) continue;
-          reopen.push(p.id);
-          widths[p.id] = p.minWidth;
-          freed -= p.minWidth - r.bar;
-        }
-        return update((d) => reopen.reduce((x, c) => paneActions.setCollapsed(x, c, false), paneActions.setWidths(d, widths)));
-      }
-      widths[id] = grown;
-      update((d) => paneActions.close(collapse.reduce((x, c) => paneActions.setCollapsed(x, c, true), paneActions.setWidths(d, widths)), hide));
+      if (!made || made.widths[id] - now.width < 2) return update((d) => paneActions.setWidths(d, { [id]: pane.minWidth }));
+      const before = Object.fromEntries(panes.map((p) => [p.id, { id: p.id, collapsed: p.collapsed, hidden: p.hidden, width: r.open.find((o) => o.id === p.id)?.width ?? p.width }]));
+      update((d) => paneActions.makeRoom(d, made, before));
     },
     /** These panes closed as × closes them (see paneActions.close). */
-    close: (which: string[]) => update((d) => paneActions.close(frozen(d), which)),
+    close: (which: string[]) => update((d) => paneActions.close(paneActions.forget(frozen(d), which), which)),
     /** The pane showing another view instead, in its place (see paneActions.switchView). */
     switchView: (id: string, view: string) => update((d) => paneActions.switchView(d, ids, id, view)),
     /** Opening makes room as a drag would (see openWithRoom); closing only shifts the others. */
     setCollapsed: (id: string, collapsed: boolean) => {
-      if (collapsed || narrow) return update((d) => paneActions.setCollapsed(frozen(d), id, collapsed));
+      if (collapsed || narrow) return update((d) => paneActions.setCollapsed(paneActions.forget(frozen(d), [id]), id, collapsed));
       const r = row();
       update((d) => openWithRoom(d, panes, r, id));
     },
