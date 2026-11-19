@@ -22,6 +22,7 @@ const writePaneDoc = (json: string) => {
 };
 import { measureRow, Row } from "./measureRow";
 import {
+  Displaced,
   fitOpening,
   isShown,
   leadId,
@@ -289,6 +290,9 @@ export function usePanes() {
       const before = Object.fromEntries(panes.map((p) => [p.id, { id: p.id, collapsed: p.collapsed, hidden: p.hidden, width: r.open.find((o) => o.id === p.id)?.width ?? p.width }]));
       update((d) => paneActions.makeRoom(d, made, before));
     },
+    /** What a cascade decided (see makeRoom), written to the layout with what it displaced remembered. */
+    applyRoom: (made: { widths: Record<string, number>; collapse: string[]; hide: string[] }, before: Record<string, Displaced>) =>
+      update((d) => paneActions.makeRoom(d, made, before)),
     /** These panes closed as × closes them (see paneActions.close). */
     close: (which: string[]) => update((d) => paneActions.close(paneActions.forget(frozen(d), which), which)),
     /** The pane showing another view instead, in its place (see paneActions.switchView). */

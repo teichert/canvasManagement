@@ -7,7 +7,7 @@ import { HideButton, PaneBar, Side, useDragHandlers } from "./PaneBar";
 import { OnView, ViewChoice } from "./ViewIcons";
 import { useRouterState } from "@tanstack/react-router";
 import { isShown, viewOf } from "./paneStore";
-import { applyWidth, useEdgeDrag } from "./useEdgeDrag";
+import { applyWidth, useCascadeDrag, useEdgeDrag } from "./useEdgeDrag";
 import { paneElement } from "./measureRow";
 import { openPopOut } from "@/app/course/[courseName]/panes/popOut";
 
@@ -61,8 +61,9 @@ export function Pane({
   children: ReactNode;
 }) {
   usePaneRegistration({ id, label, icon, minWidth, defaultWidth, collapsedByDefault, ssr });
-  const { panes, narrow, showing, flashing, setCollapsed, close, addPane, switchView, setLimits, widen, grow, move } = usePanes();
+  const { panes, narrow, showing, flashing, setCollapsed, close, addPane, switchView, setLimits, grow, move } = usePanes();
   const { dragEdge, endDrag } = useEdgeDrag();
+  const cascade = useCascadeDrag();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const popOutHref = { pathname, pane: viewOf(id) };
   const place = panes.findIndex((p) => p.id === id);
@@ -234,13 +235,15 @@ export function Pane({
             paneRef={paneRef}
             min={effectiveMin}
             label={label}
-            // past the pane's width, the pane follows the box, and keeps that width
+            // past the pane's width, the pane follows the box and the row shows the consequences live
+            // (see useCascadeDrag); on release the pane keeps that width and the row what it showed.
+            // A pane sitting at its narrowest follows the box back down too, giving the room back
             onLive={(min) => {
-              if (paneRef.current && min > width) applyWidth(paneRef.current, { minWidth: min, width: min }, place);
+              if (min > width || width <= effectiveMin + 1) cascade.preview(id, Math.max(min, minWidth));
             }}
             onMin={(min) => {
               setLimits(id, { min });
-              if (min > width) widen(id, min);
+              cascade.commit();
             }}
           />
         )}

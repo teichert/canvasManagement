@@ -60,7 +60,8 @@ export function MinRule({
       setLive(null);
     },
   );
-  const shown = live ?? Math.min(min, width);
+  // the box never draws past the pane: dragged further, the pane follows it (see Pane)
+  const shown = Math.min(live ?? min, width);
   const end = Math.max(shown - bar, 0);
   return (
     <div
